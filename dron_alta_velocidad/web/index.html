@@ -41,6 +41,7 @@ h1 span { color: var(--signal); }
 .hud { position: absolute; left: 12px; top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
 .hud-r { position: absolute; right: 12px; bottom: 10px; font: 12px var(--f-mono); color: var(--ink-2); text-align: right; pointer-events: none; }
 .tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--paper); font: 500 12px var(--f-mono); padding: 4px 8px; transform: translate(12px, 12px); white-space: nowrap; }
+[hidden] { display: none !important }
 .load { position: absolute; inset: 0; display: grid; place-items: center; font: 500 13px var(--f-mono); color: var(--ink-2); }
 
 .seg { display: inline-flex; border: 1px solid var(--rule); background: var(--sheet); }
@@ -190,8 +191,26 @@ new ResizeObserver(resize).observe(stage); resize();
 const models = {}; let current = "asm"; let selected = null; let showElec = true; let ghost = false;
 const meshes = { asm: [], exp: [] };
 const loader = new GLTFLoader();
+// Los datos binarios van en base64 dentro del JSON; se reconstruye un GLB en memoria
+// porque la página no puede pedir URLs data: con fetch.
+async function fetchGLB(url) {
+  const j = await (await fetch(url)).json();
+  const b64 = j.buffers[0].uri.split(",")[1];
+  delete j.buffers[0].uri;
+  const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  let js = new TextEncoder().encode(JSON.stringify(j));
+  const jl = (js.length + 3) & ~3, bl = (bin.length + 3) & ~3;
+  const out = new Uint8Array(12 + 8 + jl + 8 + bl);
+  const dv = new DataView(out.buffer);
+  dv.setUint32(0, 0x46546C67, true); dv.setUint32(4, 2, true); dv.setUint32(8, out.length, true);
+  dv.setUint32(12, jl, true); dv.setUint32(16, 0x4E4F534A, true);
+  out.fill(0x20, 20, 20 + jl); out.set(js, 20);
+  dv.setUint32(20 + jl, bl, true); dv.setUint32(24 + jl, 0x004E4942, true);
+  out.set(bin, 28 + jl);
+  return out.buffer;
+}
 function load(key, url) {
-  return new Promise((res, rej) => loader.load(url, g => {
+  return fetchGLB(url).then(buf => new Promise((res, rej) => loader.parse(buf, "", g => {
     g.scene.traverse(o => {
       if (!o.isMesh) return;
       let n = o, part = null;
@@ -204,7 +223,7 @@ function load(key, url) {
       meshes[key].push(o);
     });
     models[key] = g.scene; res();
-  }, undefined, rej));
+  }, rej)));
 }
 
 function applyState() {
