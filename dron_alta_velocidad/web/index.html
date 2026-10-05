@@ -1,0 +1,279 @@
+<title>VECTOR-X Visor 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: drafting-table split — 3D canvas as the drawing, a spec column as the title block */
+:root {
+  --paper: #e9ecef;
+  --sheet: #f6f7f8;
+  --ink: #141a21;
+  --ink-2: #4d5866;
+  --rule: #c9cfd6;
+  --signal: #b77d00;
+  --signal-soft: rgba(183,125,0,.14);
+  --canvas: #dfe3e7;
+  --f-display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #15191e; --sheet: #1c2127; --ink: #e7eaee; --ink-2: #9aa5b2; --rule: #2e353e;
+  --signal: #f0b429; --signal-soft: rgba(240,180,41,.14); --canvas: #1f252c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #15191e; --sheet: #1c2127; --ink: #e7eaee; --ink-2: #9aa5b2; --rule: #2e353e;
+  --signal: #f0b429; --signal-soft: rgba(240,180,41,.14); --canvas: #1f252c; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--paper); color: var(--ink); font: 15px/1.55 var(--f-body); }
+.wrap { max-width: 1280px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 40px; display: grid; gap: 18px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; border-bottom: 1px solid var(--rule); padding-bottom: 12px; }
+h1 { font: 700 clamp(28px, 4vw, 42px)/1 var(--f-display); letter-spacing: .02em; margin: 0; text-wrap: balance; }
+h1 span { color: var(--signal); }
+.sub { color: var(--ink-2); margin: 0; flex: 1 1 320px; min-width: 0; }
+.drw { font: 500 12px var(--f-mono); color: var(--ink-2); letter-spacing: .06em; text-transform: uppercase; }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; }
+@media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+.stage { position: relative; background: var(--canvas); border: 1px solid var(--rule); aspect-ratio: 4 / 3.3; max-width: 100%; overflow: hidden; }
+.stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.hud { position: absolute; left: 12px; top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+.hud-r { position: absolute; right: 12px; bottom: 10px; font: 12px var(--f-mono); color: var(--ink-2); text-align: right; pointer-events: none; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--paper); font: 500 12px var(--f-mono); padding: 4px 8px; transform: translate(12px, 12px); white-space: nowrap; }
+.load { position: absolute; inset: 0; display: grid; place-items: center; font: 500 13px var(--f-mono); color: var(--ink-2); }
+
+.seg { display: inline-flex; border: 1px solid var(--rule); background: var(--sheet); }
+.seg button, .chip { font: 600 12px var(--f-display); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); background: transparent; border: 0; padding: 7px 11px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.chip { border: 1px solid var(--rule); background: var(--sheet); }
+.chip[aria-pressed="true"] { border-color: var(--signal); color: var(--signal); background: var(--signal-soft); }
+button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+aside { display: grid; gap: 16px; min-width: 0; }
+.block { background: var(--sheet); border: 1px solid var(--rule); }
+.block h2 { font: 600 12px var(--f-display); letter-spacing: .12em; text-transform: uppercase; margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--rule); color: var(--ink-2); }
+dl.spec { margin: 0; display: grid; grid-template-columns: auto 1fr; }
+dl.spec dt, dl.spec dd { margin: 0; padding: 7px 14px; border-bottom: 1px solid var(--rule); }
+dl.spec dt { color: var(--ink-2); font-size: 13px; }
+dl.spec dd { font: 500 13px var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
+dl.spec > :nth-last-child(-n+2) { border-bottom: 0; }
+
+ul.parts { list-style: none; margin: 0; padding: 4px 0; max-height: 360px; overflow-y: auto; }
+ul.parts li button { width: 100%; display: grid; grid-template-columns: 30px 1fr auto; gap: 8px; align-items: baseline; text-align: left; background: none; border: 0; color: var(--ink); font: 14px var(--f-body); padding: 6px 14px; cursor: pointer; }
+ul.parts li button:hover, ul.parts li button[aria-pressed="true"] { background: var(--signal-soft); }
+ul.parts li button[aria-pressed="true"] .n { color: var(--signal); }
+.n { font: 500 12px var(--f-mono); color: var(--ink-2); }
+.q { font: 500 12px var(--f-mono); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.group { font: 600 11px var(--f-display); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); padding: 10px 14px 4px; }
+.note { font-size: 13px; color: var(--ink-2); padding: 10px 14px; margin: 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>VECTOR<span>-X</span></h1>
+    <p class="sub">Dron de alta velocidad de fuselaje vertical, clase 5", imprimible en 3D. Gira, acerca y toca cualquier pieza para identificarla.</p>
+    <span class="drw">Plano VX-001 · mm · rev A</span>
+  </header>
+
+  <div class="grid">
+    <div class="stage" id="stage">
+      <div class="load" id="load">Cargando modelo…</div>
+      <div class="hud">
+        <div class="seg" role="group" aria-label="Vista">
+          <button id="v-asm" aria-pressed="true">Ensamblado</button>
+          <button id="v-exp" aria-pressed="false">Explosionado</button>
+        </div>
+        <button class="chip" id="t-elec" aria-pressed="true">Electrónica</button>
+        <button class="chip" id="t-shell" aria-pressed="false">Fuselaje translúcido</button>
+        <button class="chip" id="t-spin" aria-pressed="true">Giro</button>
+      </div>
+      <div class="hud-r" id="readout">—</div>
+      <div class="tip" id="tip" hidden></div>
+    </div>
+
+    <aside>
+      <section class="block">
+        <h2>Especificaciones</h2>
+        <dl class="spec">
+          <dt>Altura total</dt><dd>291 mm</dd>
+          <dt>Fuselaje</dt><dd>Ø64 · pared 2,4</dd>
+          <dt>Distancia entre motores</dt><dd>220 mm</dd>
+          <dt>Hélices</dt><dd>5,1×5×3</dd>
+          <dt>Motores</dt><dd>4 × 2207 · 6S</dd>
+          <dt>Batería</dt><dd>6S 1300–1500 mAh</dd>
+          <dt>Plástico impreso</dt><dd>≈ 330 g</dd>
+          <dt>Peso al despegue</dt><dd>≈ 800 g</dd>
+        </dl>
+      </section>
+      <section class="block">
+        <h2>Piezas</h2>
+        <ul class="parts" id="parts"></ul>
+        <p class="note">Las 17 piezas se imprimen sin soportes. Los STL ya orientados están en <code>stl/</code>, dentro del repositorio.</p>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+const PARTS = [
+  ["01", "cola", "Cola con aletas", 1, "Impresas"],
+  ["02", "tapa_cola", "Tapa de cola (ventana ToF)", 1, "Impresas"],
+  ["03", "placa_pila", "Placa de la pila FC/ESC", 1, "Impresas"],
+  ["04", "buje_inferior", "Buje inferior", 1, "Impresas"],
+  ["05", "buje_superior", "Buje superior", 1, "Impresas"],
+  ["06", "brazo", "Brazo con góndola", 4, "Impresas"],
+  ["07", "cupula_motor", "Cúpula de motor", 4, "Impresas"],
+  ["08", "cuerpo_superior", "Cuerpo superior", 1, "Impresas"],
+  ["09", "placa_avionica", "Placa de aviónica", 1, "Impresas"],
+  ["10", "soporte_camara", "Soporte cámara + GPS", 1, "Impresas"],
+  ["11", "nariz", "Nariz con mástil", 1, "Impresas"],
+  ["M", "Motor", "Motor 2207", 4, "Electrónica"],
+  ["H", "Helice", "Hélice 5,1\" tripala", 4, "Electrónica"],
+  ["E", "ESC", "ESC 4 en 1 · 55 A", 1, "Electrónica"],
+  ["F", "Controladora", "Controladora F7", 1, "Electrónica"],
+  ["B", "Bateria", "Batería LiPo 6S", 1, "Electrónica"],
+  ["C", "Camara", "Cámara FPV 19 mm", 1, "Electrónica"],
+  ["V", "VTX", "VTX digital 20×20", 1, "Electrónica"],
+  ["R", "Receptor", "Receptor ExpressLRS", 1, "Electrónica"],
+  ["G", "GPS", "GPS M10 + brújula", 1, "Electrónica"],
+  ["T", "Sensor_ToF", "Sensor ToF", 1, "Electrónica"],
+  ["A", "Antena", "Antena VTX", 1, "Electrónica"],
+];
+const norm = s => (s || "").toLowerCase().replace(/[_\s]+/g, "_");
+function partOf(name) {
+  const n = norm(name);
+  for (const p of PARTS) if (n.startsWith(norm(p[1]))) return p;
+  return null;
+}
+const PRINTED = new Set(PARTS.filter(p => p[4] === "Impresas").map(p => p[1]));
+const SHELL = new Set(["cola", "tapa_cola", "buje_inferior", "buje_superior", "cuerpo_superior", "nariz"]);
+
+const stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.AgXToneMapping ?? THREE.ACESFilmicToneMapping;
+stage.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(1, 2, 1.4); scene.add(sun);
+const camera = new THREE.PerspectiveCamera(32, 1, 0.005, 10);
+camera.position.set(0.55, 0.42, 0.62);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.14, 0);
+controls.enableDamping = true;
+controls.autoRotate = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+controls.autoRotateSpeed = 1.2;
+controls.minDistance = 0.18; controls.maxDistance = 2.2;
+
+const grid = new THREE.GridHelper(0.6, 24, 0x8a94a0, 0x8a94a0);
+grid.material.transparent = true; grid.material.opacity = 0.25; scene.add(grid);
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage); resize();
+
+const models = {}; let current = "asm"; let selected = null; let showElec = true; let ghost = false;
+const meshes = { asm: [], exp: [] };
+const loader = new GLTFLoader();
+function load(key, url) {
+  return new Promise((res, rej) => loader.load(url, g => {
+    g.scene.traverse(o => {
+      if (!o.isMesh) return;
+      let n = o, part = null;
+      while (n && !part) { part = partOf(n.name); n = n.parent; }
+      o.userData.part = part;
+      o.userData.printed = part && PRINTED.has(part[1]);
+      o.userData.shell = part && SHELL.has(part[1]);
+      o.material = o.material.clone();
+      o.userData.base = { color: o.material.color.clone(), emissive: o.material.emissive.clone() };
+      meshes[key].push(o);
+    });
+    models[key] = g.scene; res();
+  }, undefined, rej));
+}
+
+function applyState() {
+  for (const k of ["asm", "exp"]) if (models[k]) models[k].visible = k === current;
+  for (const o of meshes[current]) {
+    const m = o.material, p = o.userData.part;
+    o.visible = showElec || o.userData.printed;
+    const isSel = selected && p && p[1] === selected;
+    m.emissive.copy(isSel ? new THREE.Color(0xf0a000) : o.userData.base.emissive);
+    m.emissiveIntensity = isSel ? 0.55 : 1;
+    const fade = (ghost && o.userData.shell && !isSel) || (selected && !isSel && o.userData.printed && ghost);
+    m.transparent = fade; m.opacity = fade ? 0.18 : 1; m.depthWrite = !fade;
+  }
+}
+
+function setPressed(id, v) { document.getElementById(id).setAttribute("aria-pressed", String(v)); }
+document.getElementById("v-asm").onclick = () => { current = "asm"; setPressed("v-asm", true); setPressed("v-exp", false); applyState(); };
+document.getElementById("v-exp").onclick = () => { if (!models.exp) return; current = "exp"; setPressed("v-asm", false); setPressed("v-exp", true); applyState(); };
+document.getElementById("t-elec").onclick = () => { showElec = !showElec; setPressed("t-elec", showElec); applyState(); };
+document.getElementById("t-shell").onclick = () => { ghost = !ghost; setPressed("t-shell", ghost); applyState(); };
+document.getElementById("t-spin").onclick = () => { controls.autoRotate = !controls.autoRotate; setPressed("t-spin", controls.autoRotate); };
+setPressed("t-spin", controls.autoRotate);
+
+// lista de piezas
+const ul = document.getElementById("parts"); let lastGroup = "";
+for (const p of PARTS) {
+  if (p[4] !== lastGroup) { const g = document.createElement("li"); g.className = "group"; g.textContent = p[4]; ul.append(g); lastGroup = p[4]; }
+  const li = document.createElement("li"); const b = document.createElement("button");
+  b.id = "p-" + p[1]; b.setAttribute("aria-pressed", "false");
+  b.innerHTML = `<span class="n">${p[0]}</span><span>${p[2]}</span><span class="q">×${p[3]}</span>`;
+  b.onclick = () => select(selected === p[1] ? null : p[1]);
+  li.append(b); ul.append(li);
+}
+function select(key) {
+  if (selected) setPressed("p-" + selected, false);
+  selected = key; if (key) setPressed("p-" + key, true);
+  const p = PARTS.find(x => x[1] === key);
+  readout.textContent = p ? `${p[0]} · ${p[2]} · ×${p[3]}` : "Toca una pieza";
+  applyState();
+}
+
+// selección con el puntero
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2(), tip = document.getElementById("tip"), readout = document.getElementById("readout");
+function pick(ev) {
+  const r = renderer.domElement.getBoundingClientRect();
+  ptr.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ptr, camera);
+  const hit = ray.intersectObjects(meshes[current].filter(o => o.visible && !(o.material.transparent)), false)[0];
+  return hit && hit.object.userData.part;
+}
+renderer.domElement.addEventListener("pointermove", ev => {
+  if (ev.pointerType !== "mouse") return;
+  const p = pick(ev); const r = stage.getBoundingClientRect();
+  if (p) { tip.hidden = false; tip.textContent = p[2]; tip.style.left = (ev.clientX - r.left) + "px"; tip.style.top = (ev.clientY - r.top) + "px"; }
+  else tip.hidden = true;
+});
+renderer.domElement.addEventListener("pointerleave", () => tip.hidden = true);
+let down = null;
+renderer.domElement.addEventListener("pointerdown", ev => down = [ev.clientX, ev.clientY]);
+renderer.domElement.addEventListener("pointerup", ev => {
+  if (!down || Math.hypot(ev.clientX - down[0], ev.clientY - down[1]) > 5) return;
+  const p = pick(ev); select(p ? (selected === p[1] ? null : p[1]) : null);
+});
+
+(function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+
+load("asm", "dron_ensamblado.glb").then(() => {
+  scene.add(models.asm); document.getElementById("load").hidden = true;
+  readout.textContent = "Toca una pieza"; applyState();
+  return load("exp", "dron_explosionado.glb").then(() => { scene.add(models.exp); applyState(); });
+}).catch(() => { document.getElementById("load").textContent = "No se pudo cargar el modelo 3D. Recarga la página para reintentarlo."; });
+</script>
