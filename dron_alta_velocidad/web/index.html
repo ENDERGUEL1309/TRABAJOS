@@ -271,9 +271,9 @@ renderer.domElement.addEventListener("pointerup", ev => {
 
 (function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
 
-load("asm", "dron_ensamblado.glb").then(() => {
+load("asm", "dron_ensamblado.gltf.json").then(() => {
   scene.add(models.asm); document.getElementById("load").hidden = true;
   readout.textContent = "Toca una pieza"; applyState();
-  return load("exp", "dron_explosionado.glb").then(() => { scene.add(models.exp); applyState(); });
+  return load("exp", "dron_explosionado.gltf.json").then(() => { scene.add(models.exp); applyState(); });
 }).catch(() => { document.getElementById("load").textContent = "No se pudo cargar el modelo 3D. Recarga la página para reintentarlo."; });
 </script>
