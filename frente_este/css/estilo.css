@@ -222,6 +222,9 @@ body.desplegando #hud { display: none; }
 #tactil[data-modo="infanteria"] #btn-mapa { top: auto; right: max(3vw, env(safe-area-inset-right)); bottom: 54vh; }
 #btn-cohetes { right: calc(max(5vw, env(safe-area-inset-right)) + 38vh); bottom: 26vh; background: rgba(160, 90, 20, 0.3); }
 #btn-bomba { right: calc(max(5vw, env(safe-area-inset-right)) + 38vh); bottom: 40vh; }
-#tactil[data-modo="heli"] #btn-disparar, #tactil[data-modo="avion"] #btn-disparar { right: calc(max(5vw, env(safe-area-inset-right)) + 38vh); bottom: 7vh; width: 16vh; height: 16vh; }
-#tactil[data-modo="heli"] #btn-interactuar, #tactil[data-modo="avion"] #btn-interactuar { right: auto; left: calc(max(5vw, env(safe-area-inset-left)) + 38vh); bottom: 5vh; }
-#tactil[data-modo="heli"] #btn-camara, #tactil[data-modo="avion"] #btn-camara { left: calc(max(5vw, env(safe-area-inset-left)) + 38vh); bottom: 18vh; }
+/* Aeronaves: armas a la izquierda (el pulgar derecho pilota) */
+#tactil[data-modo="heli"] #btn-disparar, #tactil[data-modo="avion"] #btn-disparar { right: auto; left: max(5vw, env(safe-area-inset-left)); bottom: 48vh; width: 15vh; height: 15vh; }
+#tactil[data-modo="heli"] #btn-cohetes, #tactil[data-modo="avion"] #btn-cohetes { right: auto; left: calc(max(5vw, env(safe-area-inset-left)) + 17vh); bottom: 50vh; }
+#tactil[data-modo="avion"] #btn-bomba { right: auto; left: calc(max(5vw, env(safe-area-inset-left)) + 31vh); bottom: 50vh; }
+#tactil[data-modo="heli"] #btn-interactuar, #tactil[data-modo="avion"] #btn-interactuar { left: auto; right: calc(max(5vw, env(safe-area-inset-right)) + 38vh); bottom: 5vh; }
+#tactil[data-modo="heli"] #btn-camara, #tactil[data-modo="avion"] #btn-camara { left: auto; right: calc(max(5vw, env(safe-area-inset-right)) + 38vh); bottom: 18vh; }

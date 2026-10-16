@@ -8,8 +8,8 @@ import { clamp, damp, segOBB, pushCircleAABB } from './util.js';
 const G = 9.81;
 
 export const ARMAS_AIRE = {
-  yakb: { nombre: 'YakB-12,7', tipo: 'bala', cadencia: 1300, vel: 810, danoSold: 90, dano: { pesado: 2, ligero: 25, ninguno: 45 }, trazadora: 3, calibre: 2 },
-  gsh30: { nombre: 'GSh-30-2', tipo: 'bala', cadencia: 1500, vel: 870, danoSold: 150, dano: { pesado: 18, ligero: 90, ninguno: 150 }, trazadora: 2, calibre: 3.5 },
+  yakb: { nombre: 'YakB-12,7', tipo: 'bala', cadencia: 1100, vel: 810, danoSold: 100, dano: { pesado: 2, ligero: 25, ninguno: 45 }, trazadora: 3, calibre: 2 },
+  gsh30: { nombre: 'GSh-30-2', tipo: 'bala', cadencia: 900, vel: 870, danoSold: 150, dano: { pesado: 18, ligero: 90, ninguno: 150 }, trazadora: 2, calibre: 3.5, explota: true, radio: 4 },
   s8: { nombre: 'Cohete S-8', tipo: 'cohete', vel: 420, velMax: 600, danoSold: 200, dano: { pesado: 230, ligero: 600, ninguno: 700 }, radio: 8, explota: true, calibre: 3 },
   fab250: { nombre: 'Bomba FAB-250', tipo: 'bomba', vel: 1, danoSold: 320, dano: { pesado: 1200, ligero: 1200, ninguno: 1200 }, radio: 26, explota: true, calibre: 5 },
 };
@@ -172,10 +172,10 @@ export class Aeronave {
     this.local = true;
     if (this.tipo === 'avion' && !this.enVuelo) {
       const yaw = this.spawn.yaw;
-      this.pos.set(this.spawn.x + Math.sin(yaw) * 400, this.juego.mundo.getHeight(this.spawn.x, this.spawn.z) + 380, this.spawn.z);
+      this.pos.set(this.spawn.x + Math.sin(yaw) * 400, this.juego.mundo.getHeight(this.spawn.x, this.spawn.z) + 260, this.spawn.z);
       this.q.setFromEuler(new THREE.Euler(0, yaw, 0, 'YXZ'));
-      this.vel.set(0, 0, -1).applyQuaternion(this.q).multiplyScalar(140);
-      this.gas = 0.7;
+      this.vel.set(0, 0, -1).applyQuaternion(this.q).multiplyScalar(85);
+      this.gas = 0.5;
       this.enVuelo = true;
     }
   }
@@ -254,11 +254,12 @@ export class Aeronave {
     if (ang > 0) this.q.multiply(_q.setFromAxisAngle(_v.copy(this.w).normalize(), ang)).normalize();
     const fwd = this.adelante(new THREE.Vector3());
     let v = this.vel.length();
-    v += (this.gas * 14 - 0.00022 * v * v - G * fwd.y) * dt;
+    // Velocidad máxima ~160 m/s (575 km/h); con gas al 50 % unos 115 m/s
+    v += (this.gas * 9 - 0.00035 * v * v - G * fwd.y) * dt;
     v = Math.max(0, v);
-    const alinear = clamp((v - 30) / 60, 0, 1) * 2.6;
+    const alinear = clamp((v - 22) / 45, 0, 1) * 2.8;
     this.vel.lerp(fwd.multiplyScalar(v), 1 - Math.exp(-alinear * dt)).setLength(v);
-    const sustentacion = clamp((v - 50) / 45, 0, 1);
+    const sustentacion = clamp((v - 32) / 35, 0, 1);
     this.vel.y -= G * (1 - sustentacion) * dt;
     this.pos.addScaledVector(this.vel, dt);
   }

@@ -37,7 +37,7 @@ También funciona con mando (Gamepad API).
 - **Accesorios**: miras metálicas, colimador, holográfico, ópticas 4× (también PSO-1) y telescópica 8× con retícula y balanceo de respiración; silenciador, compensador y apagallamas; empuñadura vertical o angulada y bípode; cargador ampliado o de recarga rápida.
 - **Mapa completo** (botón MAPA, tecla M o tocar el minimapa): relieve, cuadrícula de 200 m, bases, aliados, vehículos y enemigos avistados.
 - **Dron más fácil**: nuevo modo **ESTABLE** por defecto. Mantiene la altura y el stick izquierdo sube y baja a unos 10 m/s. Siguen disponibles ANGLE y ACRO.
-- **Aeronaves**: helicóptero de ataque **Mi-24** (subir/bajar con mantenimiento de altura, ametralladora YakB-12,7 y cohetes S-8) y avión **Su-25** (arranque en vuelo, cañón GSh-30-2, cohetes S-8 y 4 bombas FAB-250, con opción de eyectar). Se estrellan, se derriban (el ZU-23-2 tiene espoleta de proximidad) y reaparecen en su base.
+- **Aeronaves** (botones de armas a la izquierda; asistencia de puntería suave hacia enemigos cerca de la mira): helicóptero de ataque **Mi-24** (subir/bajar con mantenimiento de altura, ametralladora de morro YakB-12,7 que se apunta arrastrando por la pantalla, con dispersión real, y cohetes S-8) y avión **Su-25** (arranque en vuelo a 260 m y ~300 km/h, máximo ~575 km/h, cañón GSh-30-2 con munición explosiva, cohetes S-8 y 4 bombas FAB-250, con opción de eyectar). Se estrellan, se derriban (el ZU-23-2 tiene espoleta de proximidad) y reaparecen en su base.
 
 ## Qué incluye
 

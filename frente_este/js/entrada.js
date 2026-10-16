@@ -187,7 +187,7 @@ export class Entrada {
     this.mantenidos = {};
     const etq = this.joys.dronI.el.querySelector('.joy-etq');
     if (modo === 'heli') { this.joys.dronI.centrarY = true; this.joys.dronI.reset(); etq.textContent = 'SUBIR/BAJAR · GIRO'; }
-    if (modo === 'avion') { this.joys.dronI.centrarY = false; this.joys.dronI.x = 0; this.joys.dronI.y = 0.4; this.joys.dronI.pintar(); this.acelDron = 0.7; etq.textContent = 'GAS · TIMÓN'; }
+    if (modo === 'avion') { this.joys.dronI.centrarY = false; this.joys.dronI.x = 0; this.joys.dronI.y = 0; this.joys.dronI.pintar(); this.acelDron = 0.5; etq.textContent = 'GAS · TIMÓN'; }
   }
 
   // ESTABLE: el stick izquierdo vuelve al centro y controla la velocidad de subida (mantiene altura).

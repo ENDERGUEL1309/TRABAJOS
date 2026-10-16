@@ -713,13 +713,20 @@ export class Juego {
     this.local.pos.copy(v.pos);
     this.sonidoVehiculo(v, true);
     if (res?.choque) { this.danoVehiculo(v, 99999, this.local.id); return; }
-    // Armas fijas hacia delante
     v.tCad -= dt; v.tCohete -= dt;
     const fwd = v.adelante(new THREE.Vector3());
     const yo = this.local;
-    const disparar = (clave, punto, disp) => {
+    // El Mi-24 tiene torreta de morro: se apunta arrastrando por la pantalla. El Su-25 dispara hacia el morro.
+    let dirCanon = fwd.clone();
+    if (v.tipo === 'heli') {
+      const sens = 0.0022 * (c.fov / this.ajustes.fov);
+      v.apYawRel = clamp((v.apYawRel || 0) - e.vistaX * sens, -1.1, 1.1);
+      v.apPitchRel = clamp((v.apPitchRel ?? -0.12) - e.vistaY * sens, -1.0, 0.25);
+      dirCanon = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(v.apPitchRel, v.apYawRel, 0, 'YXZ')).applyQuaternion(v.q);
+    }
+    const disparar = (clave, punto, disp, base = fwd, asistencia = 0) => {
       const o = v.puntoMundo(punto);
-      const d = fwd.clone();
+      const d = this.asistenciaAerea(o, base, asistencia, yo.faccion);
       d.x += (Math.random() - 0.5) * disp; d.y += (Math.random() - 0.5) * disp; d.z += (Math.random() - 0.5) * disp;
       d.normalize();
       this.lanzarProyectil(clave, o, d, yo.id, yo.faccion, true);
@@ -729,13 +736,13 @@ export class Juego {
     const A = v.def.armas;
     if (e.disparar && v.tCad <= 0 && v.municion.canon > 0) {
       v.tCad = 60 / ARMAS_AIRE[A.canon].cadencia; v.municion.canon--;
-      disparar(A.canon, v.def.bocaCanon, 0.008);
+      disparar(A.canon, v.def.bocaCanon, v.tipo === 'heli' ? 0.035 : 0.025, dirCanon, v.tipo === 'heli' ? 0.06 : 0.08);
       this.sacudida = Math.max(this.sacudida, 0.12);
     }
     if (e.cohetes && v.tCohete <= 0 && v.municion.cohetes > 0) {
       v.tCohete = 0.12; v.municion.cohetes--;
       v.ladoCohete = -(v.ladoCohete || 1);
-      disparar('s8', v.def.bocaCohetes.clone().setX(v.def.bocaCohetes.x * v.ladoCohete), 0.02);
+      disparar('s8', v.def.bocaCohetes.clone().setX(v.def.bocaCohetes.x * v.ladoCohete), 0.03, fwd, 0.05);
     }
     if (e.flancos.has('bomba') && v.municion.bombas > 0) {
       v.municion.bombas--;
@@ -748,6 +755,15 @@ export class Juego {
     if (this.primeraPersona) {
       c.position.copy(v.puntoMundo(v.def.cabina));
       c.quaternion.copy(v.q);
+      if (c.fov !== this.ajustes.fov) { c.fov = this.ajustes.fov; c.updateProjectionMatrix(); }
+      this.postfx.setPerfil('vehiculo3');
+    } else if (v.tipo === 'heli') {
+      // Cámara de artillero: detrás del helicóptero mirando hacia donde apunta la torreta
+      const dist = v.def.cam3.dist;
+      const plano = dirCanon.clone().setY(Math.min(dirCanon.y, 0.2)).normalize();
+      c.position.copy(v.pos).addScaledVector(plano, -dist).add(new THREE.Vector3(0, v.def.cam3.alto, 0));
+      c.position.y = Math.max(c.position.y, this.mundo.getHeight(c.position.x, c.position.z) + 1);
+      c.lookAt(v.pos.clone().add(new THREE.Vector3(0, 2, 0)).addScaledVector(dirCanon, 40));
       if (c.fov !== this.ajustes.fov) { c.fov = this.ajustes.fov; c.updateProjectionMatrix(); }
       this.postfx.setPerfil('vehiculo3');
     } else {
@@ -765,8 +781,8 @@ export class Juego {
     c.updateMatrixWorld();
     // Punto de impacto previsto del cañón
     const boca = v.puntoMundo(v.def.bocaCanon);
-    const h = this.mundo.segmento(boca, boca.clone().addScaledVector(fwd, 1500), 6);
-    const p = h ? h.p : boca.clone().addScaledVector(fwd, 1500);
+    const h = this.mundo.segmento(boca, boca.clone().addScaledVector(dirCanon, 1500), 6);
+    const p = h ? h.p : boca.clone().addScaledVector(dirCanon, 1500);
     const q = p.clone().project(c);
     const [w, hh] = this.tamano();
     const alt = Math.max(0, v.pos.y - this.mundo.getHeight(v.pos.x, v.pos.z));
@@ -774,6 +790,27 @@ export class Juego {
       primera: false, municion: `ALT ${alt.toFixed(0)} m · ${v.tipo === 'avion' ? 'GAS ' + Math.round(v.gas * 100) + '%' : 'V ' + Math.round(v.vel.y * 10) / 10 + ' m/s'}  |  ${ARMAS_AIRE[A.canon].nombre} ${v.municion.canon} · S-8 ${v.municion.cohetes}${v.def.bombas ? ' · FAB ' + v.municion.bombas : ''}`,
       carga: 1, mira: q.z < 1 ? [(q.x * 0.5 + 0.5) * w, (-q.y * 0.5 + 0.5) * hh] : null, deseo: null,
     });
+  }
+
+  // Asistencia de puntería para aeronaves: corrige el disparo hacia el enemigo más cercano dentro de un cono
+  asistenciaAerea(origen, dir, cono, faccion) {
+    if (!cono) return dir.clone();
+    let mejor = null, angMejor = cono;
+    const prueba = (p) => {
+      const d = p.clone().sub(origen);
+      const dist = d.length();
+      if (dist > 1400 || dist < 5) return;
+      d.normalize();
+      const ang = d.angleTo(dir);
+      if (ang < angMejor) { angMejor = ang; mejor = d; }
+    };
+    for (const s of this.soldados.values()) if (s.vivo && !s.enVehiculo && s.faccion !== faccion) prueba(s.pos.clone().setY(s.pos.y + 1));
+    for (const v of this.vehiculos) {
+      if (v.destruido || v === this.vehLocal) continue;
+      const cond = v.conductor ? this.soldados.get(v.conductor) : null;
+      if (cond && cond.faccion !== faccion) prueba(v.pos.clone().setY(v.pos.y + 1.5));
+    }
+    return mejor || dir.clone();
   }
 
   // ---------------------------------------------------------------- dron
@@ -957,7 +994,7 @@ export class Juego {
 
   alImpactar(b, imp) {
     const mat = imp.mat === 'carne' ? null : imp.mat;
-    if (b.tipo === 'bala') {
+    if (b.tipo === 'bala' && !b.explota) {
       if (imp.soldado) this.efectos.sangre(imp.p, imp.n.clone().negate());
       else if (mat && mat !== 'aire') this.efectos.impacto(imp.p, imp.n, mat);
       if (mat && mat !== 'aire') this.audio.impacto(imp.p, mat);
@@ -971,7 +1008,7 @@ export class Juego {
     }
     if (b.explota) {
       if (!b.local) return; // la explosión autoritativa llega por red
-      this.explosion(imp.p.clone().addScaledVector(imp.n, 0.3), { radio: b.radio, danoSold: b.danoSold, dano: b.dano, duenoId: b.duenoId, faccion: b.faccion, directo: imp.vehiculo || null, tam: { obus: 1.6, bomba: 3.2, granada: 0.8 }[b.tipo] || 1, arma: b.arma });
+      this.explosion(imp.p.clone().addScaledVector(imp.n, 0.3), { radio: b.radio, danoSold: b.danoSold, dano: b.dano, duenoId: b.duenoId, faccion: b.faccion, directo: imp.vehiculo || null, tam: { obus: 1.6, bomba: 3.2, granada: 0.8, bala: 0.3 }[b.tipo] || 1, arma: b.arma });
       if (imp.soldado) this.danoSoldado(imp.soldado, 300, b.duenoId, b.arma, imp.n);
       if (imp.dron) this.derribarDron(imp.dron, b.duenoId);
       return;
@@ -994,14 +1031,14 @@ export class Juego {
     this.efectos.explosion(p, tam);
     this.audio.explosion(p, tam);
     const h = this.mundo.getHeight(p.x, p.z);
-    if (p.y - h < 1.2) this.mundo.crater(p.x, p.z, 1.2 + tam * 1.4, 0.35 + tam * 0.35);
+    if (p.y - h < 1.2 && tam >= 0.5) this.mundo.crater(p.x, p.z, 1.2 + tam * 1.4, 0.35 + tam * 0.35);
     const cam = this.camaraActiva.getWorldPosition(_v);
     const d = cam.distanceTo(p);
     if (d < 50) {
       const k = 1 - d / 50;
       this.sacudida = Math.max(this.sacudida, k * 1.5 * tam);
       this.postfx.destello = Math.max(this.postfx.destello, k * k * 0.6);
-      if (d < 14 && this.estado !== 'dron') { this.audio.pitido(2.5); this.postfx.desenfoque = 1.2; }
+      if (d < 14 * tam && this.estado !== 'dron') { this.audio.pitido(2.5); this.postfx.desenfoque = 1.2; }
     }
     if (o.dron) { const dr = this.drones.get(o.dron); if (dr) { dr.destruir(); this.drones.delete(o.dron); } }
     if (remota) return;
