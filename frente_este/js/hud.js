@@ -2,7 +2,7 @@
 // retícula de visor de vehículo y OSD de dron FPV.
 import * as THREE from 'three';
 import { FACCIONES } from './soldado.js';
-import { ZONA } from './mundo.js';
+import { ZONA, MAPA, carreteraZ } from './mundo.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -12,7 +12,9 @@ export class HUD {
     this.el = {};
     for (const id of ['hud', 'bcTiempo', 'bcId', 'brujula', 'minimapa', 'marcador', 'feed', 'mensaje', 'punto', 'marcaImpacto', 'indDano',
       'infoArma', 'armaNombre', 'armaMun', 'vida', 'vidaBarra', 'aviso', 'hudVeh', 'vehNombre', 'vehVel', 'vehVida', 'vehMun', 'vehRecarga',
-      'vehIndic', 'vehTorreta', 'reticulaVisor', 'mira3', 'miraDeseo', 'osdDron', 'pantallaMuerte', 'muerteTexto', 'muerteCuenta', 'tabla', 'red', 'ayudaTeclas']) this.el[id] = $(id);
+      'vehIndic', 'vehTorreta', 'reticulaVisor', 'mira3', 'miraDeseo', 'osdDron', 'pantallaMuerte', 'muerteTexto', 'muerteCuenta', 'tabla', 'red', 'ayudaTeclas', 'mapaGrande', 'lienzoMapa', 'visorFusil']) this.el[id] = $(id);
+    this.el.minimapa.addEventListener('click', () => this.alternarMapa());
+    this.el.mapaGrande.addEventListener('click', () => this.alternarMapa(false));
     this.ctxB = this.el.brujula.getContext('2d');
     this.ctxM = this.el.minimapa.getContext('2d');
     this.mensajes = [];
@@ -62,6 +64,8 @@ export class HUD {
     vis('mira3', false);
     vis('miraDeseo', false);
     vis('pantallaMuerte', m === 'muerto');
+    if (m !== 'infanteria') this.visor(null);
+    document.body.classList.toggle('desplegando', m === 'despliegue');
     document.body.classList.toggle('modo-dron', m === 'dron');
   }
 
@@ -110,8 +114,112 @@ export class HUD {
     if (this.modo === 'infanteria' && J.arma) {
       const a = J.arma;
       E.armaNombre.textContent = a.def.nombre;
-      E.armaMun.textContent = a.recargando > 0 ? 'RECARGANDO…' : `${a.est.cargador} / ${a.est.reserva}`;
+      E.armaMun.textContent = (a.recargando > 0 ? 'RECARGANDO…' : `${a.est.cargador} / ${a.est.reserva}`) + `  ·  G ${J.granadas}`;
       E.punto.style.opacity = J.ajustes.punto ? (1 - a.apuntado) * 0.8 : 0;
+    }
+  }
+
+  // Retícula de óptica de aumento (PSO-1 o mil-dot)
+  visor(tipo) {
+    const v = this.el.visorFusil;
+    if (!tipo) { if (v.style.display !== 'none') v.style.display = 'none'; return; }
+    v.style.display = '';
+    v.dataset.tipo = tipo;
+  }
+
+  // Mapa completo de la zona de operaciones
+  alternarMapa(forzar) {
+    const m = this.el.mapaGrande;
+    const abrir = forzar ?? m.style.display === 'none';
+    m.style.display = abrir ? '' : 'none';
+    clearInterval(this.intMapa);
+    if (abrir) { this.dibujarMapaGrande(); this.intMapa = setInterval(() => this.dibujarMapaGrande(), 500); }
+  }
+
+  fondoCompleto() {
+    if (this.fondoGrande) return this.fondoGrande;
+    const N = 512, c = document.createElement('canvas'); c.width = c.height = N;
+    const g = c.getContext('2d'), W = this.j.mundo;
+    const img = g.createImageData(N, N);
+    const k = (MAPA * 2) / N;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const wx = -MAPA + x * k, wz = -MAPA + y * k;
+      const h = W.getHeight(wx, wz), hx = W.getHeight(wx + k, wz), hz = W.getHeight(wx, wz + k);
+      const sombra = Math.max(0.55, Math.min(1.25, 1 + (h - hx) * 0.12 + (h - hz) * 0.12));
+      const base = 70 + (h + 15) * 1.6;
+      const i = (y * N + x) * 4;
+      img.data[i] = base * 0.86 * sombra; img.data[i + 1] = base * 0.88 * sombra; img.data[i + 2] = base * 0.66 * sombra; img.data[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    const m = (v) => (v + MAPA) / k;
+    // Carretera principal
+    g.strokeStyle = 'rgba(205,190,160,0.7)'; g.lineWidth = 2;
+    g.beginPath(); for (let x = -MAPA; x <= MAPA; x += 20) { x === -MAPA ? g.moveTo(m(x), m(carreteraZ(x))) : g.lineTo(m(x), m(carreteraZ(x))); } g.stroke();
+    // Árboles
+    g.fillStyle = 'rgba(40,52,28,0.75)';
+    for (const a of W.arboles) g.fillRect(m(a.x) - 0.7, m(a.z) - 0.7, 1.4, 1.4);
+    // Edificios
+    g.fillStyle = 'rgba(30,28,26,0.85)';
+    for (const col of W.colisores) if (col.max.y - col.min.y > 2) g.fillRect(m(col.min.x), m(col.min.z), Math.max(1, (col.max.x - col.min.x) / k), Math.max(1, (col.max.z - col.min.z) / k));
+    // Trincheras
+    g.strokeStyle = 'rgba(60,40,25,1)'; g.lineWidth = 1.2;
+    for (const [ax, az, bx, bz] of W.segTrinchera) { g.beginPath(); g.moveTo(m(ax), m(az)); g.lineTo(m(bx), m(bz)); g.stroke(); }
+    // Cuadrícula de 200 m
+    g.strokeStyle = 'rgba(255,255,255,0.12)'; g.lineWidth = 1; g.fillStyle = 'rgba(255,255,255,0.5)'; g.font = '9px monospace';
+    for (let v = -MAPA; v <= MAPA; v += 200) {
+      g.beginPath(); g.moveTo(m(v), 0); g.lineTo(m(v), N); g.stroke();
+      g.beginPath(); g.moveTo(0, m(v)); g.lineTo(N, m(v)); g.stroke();
+    }
+    for (let i = 0; i < 12; i++) { g.fillText(String.fromCharCode(65 + i), m(-MAPA + i * 200) + 3, 10); g.fillText(String(i + 1), 2, m(-MAPA + i * 200) + 12); }
+    // Zona de combate
+    g.strokeStyle = 'rgba(242,201,76,0.5)'; g.setLineDash([4, 4]); g.strokeRect(m(-ZONA), m(-ZONA), (ZONA * 2) / k, (ZONA * 2) / k); g.setLineDash([]);
+    this.fondoGrande = c;
+    return c;
+  }
+
+  dibujarMapaGrande() {
+    const J = this.j, cv = this.el.lienzoMapa, g = cv.getContext('2d');
+    const S = cv.width, k = S / (MAPA * 2), m = (v) => (v + MAPA) * k;
+    g.drawImage(this.fondoCompleto(), 0, 0, S, S);
+    const L = J.local, ahora = performance.now();
+    g.font = '600 12px ui-monospace, monospace'; g.textAlign = 'center';
+    for (const f of ['UA', 'RU']) {
+      const B = J.mundo.bases[f];
+      g.fillStyle = FACCIONES[f].color; g.globalAlpha = 0.85;
+      g.fillRect(m(B.x) - 6, m(0) - 6, 12, 12);
+      g.globalAlpha = 1; g.fillText('BASE ' + f, m(B.x), m(0) - 10);
+    }
+    g.fillStyle = '#e8e6da'; g.fillText('ALDEA', m(10), m(-20));
+    for (const v of J.vehiculos) {
+      if (v.destruido) continue;
+      const amigo = v.conductor ? J.soldados.get(v.conductor)?.faccion === L.faccion : v.faccion === L.faccion;
+      if (!amigo && !(v.conductor && (this.vistos.get(v.conductor) || 0) > ahora)) continue;
+      g.save(); g.translate(m(v.pos.x), m(v.pos.z)); g.rotate(-v.yaw);
+      g.fillStyle = amigo ? '#e8e6da' : '#ff6a50';
+      if (v.aereo) { g.beginPath(); g.moveTo(0, -7); g.lineTo(5, 5); g.lineTo(-5, 5); g.fill(); }
+      else g.fillRect(-3.5, -6, 7, 12);
+      g.restore();
+    }
+    for (const s of J.soldados.values()) {
+      if (!s.vivo || s.enVehiculo || s === L) continue;
+      const aliado = s.faccion === L.faccion;
+      if (!aliado && !((this.vistos.get(s.id) || 0) > ahora)) continue;
+      g.fillStyle = aliado ? FACCIONES[s.faccion].color : '#ff4030';
+      g.beginPath(); g.arc(m(s.pos.x), m(s.pos.z), 4, 0, Math.PI * 2); g.fill();
+      if (aliado) { g.fillStyle = '#e8e6da'; g.fillText(s.nombre, m(s.pos.x), m(s.pos.z) - 7); }
+    }
+    for (const d of J.drones.values()) {
+      if (!d.vivo || (d.faccion !== L.faccion && !((this.vistos.get(d.id) || 0) > ahora))) continue;
+      g.strokeStyle = d.faccion === L.faccion ? '#9fd' : '#f64'; g.lineWidth = 2;
+      const x = m(d.pos.x), y = m(d.pos.z);
+      g.beginPath(); g.moveTo(x - 4, y - 4); g.lineTo(x + 4, y + 4); g.moveTo(x + 4, y - 4); g.lineTo(x - 4, y + 4); g.stroke();
+    }
+    if (L.vivo) {
+      const p = J.posFoco();
+      g.save(); g.translate(m(p.x), m(p.z)); g.rotate((J.rumbo() * Math.PI) / 180);
+      g.fillStyle = '#ffffff'; g.strokeStyle = '#000'; g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(0, -9); g.lineTo(6, 7); g.lineTo(-6, 7); g.closePath(); g.fill(); g.stroke();
+      g.restore();
     }
   }
 

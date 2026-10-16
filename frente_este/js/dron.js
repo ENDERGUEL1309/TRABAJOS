@@ -4,7 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clamp } from './util.js';
 
 const G = 9.81;
-const TW = 2.6;            // relación empuje/peso con carga
+const TW = 3.2;            // relación empuje/peso con carga
 const VEL_ROT_MAX = 10.5;  // rad/s (~600 °/s) en ACRO
 const ANG_MAX = 0.95;      // rad (~55°) en ANGLE
 const UPTILT = 0.42;       // inclinación de la cámara (~24°)
@@ -58,7 +58,7 @@ export class Dron {
     this.q = new THREE.Quaternion();
     this.w = new THREE.Vector3();    // velocidad angular en ejes del cuerpo
     this.acel = 0;
-    this.modo = 'ANGLE';
+    this.modo = 'ESTABLE';
     this.vivo = true;
     this.bateria = 1;
     this.senal = 1;
@@ -83,8 +83,15 @@ export class Dron {
     this.tVuelo += dt;
     if (this.tVuelo > 1.2) this.armado = true;
     // Curva de gas: mitad del recorrido ~ vuelo estacionario
-    const t = e.dAcel;
-    const empuje = (t <= 0.5 ? t / 0.5 : 1 + ((t - 0.5) / 0.5) * (TW - 1)) * G;
+    let t = e.dAcel;
+    let empuje = (t <= 0.5 ? t / 0.5 : 1 + ((t - 0.5) / 0.5) * (TW - 1)) * G;
+    if (this.modo === 'ESTABLE') {
+      // Mantiene la altura: el stick pide velocidad vertical (hasta +12 m/s subiendo, -9 m/s bajando)
+      const vyObj = e.dSubir >= 0 ? e.dSubir * 12 : e.dSubir * 9;
+      const arribaY = Math.max(0.35, new THREE.Vector3(0, 1, 0).applyQuaternion(this.q).y);
+      empuje = clamp((G + (vyObj - this.vel.y) * 3.5) / arribaY, 0, TW * G);
+      t = empuje / (TW * G);
+    }
     this.acel = t;
     // Velocidades angulares objetivo (cuerpo): x = cabeceo, y = guiñada, z = alabeo
     const curva = (s) => s * (0.25 + 0.75 * s * s);
@@ -92,7 +99,7 @@ export class Dron {
     if (this.modo === 'ACRO') {
       obj.set(-curva(e.dCabeceo) * VEL_ROT_MAX, -curva(e.dGuinada) * VEL_ROT_MAX * 0.6, -curva(e.dAlabeo) * VEL_ROT_MAX);
     } else {
-      // ANGLE: autonivelado hacia inclinación objetivo
+      // ANGLE / ESTABLE: autonivelado hacia inclinación objetivo
       const eu = new THREE.Euler().setFromQuaternion(this.q, 'YXZ');
       const objPitch = -e.dCabeceo * ANG_MAX, objRoll = -e.dAlabeo * ANG_MAX;
       const qObj = new THREE.Quaternion().setFromEuler(new THREE.Euler(objPitch, eu.y, objRoll, 'YXZ'));
@@ -123,7 +130,7 @@ export class Dron {
     this.vel.addScaledVector(a, dt);
     this.pos.addScaledVector(this.vel, dt);
     // Batería (≈ 5 min, más rápido con mucho gas)
-    this.bateria -= dt * (0.0022 + t * t * 0.003);
+    this.bateria -= dt * (0.0022 + t * t * 0.003) / (this.bateriaMult || 1);
     // Señal de vídeo según distancia y obstáculos respecto al operador
     this.tSenal -= dt;
     if (this.tSenal <= 0 && operador) {

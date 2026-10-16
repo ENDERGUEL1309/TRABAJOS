@@ -1,7 +1,7 @@
 // IA de soldados (solo en partida local): avance por cobertura, detección con línea de visión,
 // tiempo de reacción, ráfagas con error de puntería decreciente, RPG contra blindados y fuego antidron.
 import * as THREE from 'three';
-import { ARMAS } from './armas.js';
+import { CLASES, equipoPorDefecto, estadisticas } from './arsenal.js';
 import { FACCIONES } from './soldado.js';
 import { wrapAngle, dampAngle, damp, clamp } from './util.js';
 
@@ -15,10 +15,7 @@ export class IABot {
   constructor(juego, s) {
     this.j = juego;
     this.s = s;
-    const prim = FACCIONES[s.faccion].primaria;
-    this.def = ARMAS[prim];
-    this.cargador = this.def.cargador;
-    this.rpg = 2;
+    this.equipar();
     this.objetivo = null;
     this.tPercep = Math.random() * 0.3;
     this.tReaccion = 0;
@@ -33,6 +30,23 @@ export class IABot {
     this.tApuntando = 0;
   }
 
+  // Clase y armas aleatorias en cada despliegue
+  equipar() {
+    const claves = Object.keys(CLASES);
+    const clase = claves[Math.floor(Math.random() * claves.length)];
+    const eq = equipoPorDefecto(clase, this.s.faccion);
+    const C = CLASES[clase];
+    eq.primaria = C.primarias[Math.floor(Math.random() * C.primarias.length)];
+    eq.accPrimaria = undefined;
+    this.s.setEquipo(eq);
+    this.s.clase = clase;
+    this.def = estadisticas(eq.primaria);
+    this.defEsp = eq.especial ? estadisticas(eq.especial) : null;
+    this.cargador = this.def.cargador;
+    this.rpg = eq.especial ? 2 : 0;
+    this.alcance = this.def.visor ? 380 : 220;
+  }
+
   elegirDestino() {
     const lado = this.s.faccion === 'UA' ? -1 : 1;
     // Preferir puntos de su mitad o del centro, con algo de aleatoriedad
@@ -45,7 +59,7 @@ export class IABot {
   percibir() {
     const s = this.s, J = this.j;
     const ojo = s.ojos(new THREE.Vector3());
-    let mejor = null, dMejor = 220;
+    let mejor = null, dMejor = this.alcance;
     for (const o of J.soldados.values()) {
       if (o === s || !o.vivo || o.faccion === s.faccion) continue;
       let pos = o.pos, alto = 1.2 - o.agachado * 0.45;
@@ -93,7 +107,7 @@ export class IABot {
     s.quiereAgachar = false;
     if (this.tRecarga > 0) {
       this.tRecarga -= dt;
-      if (this.tRecarga <= 0) { this.cargador = this.def.cargador; if (s.arma === 'rpg') s.setArma('fusil'); }
+      if (this.tRecarga <= 0) { this.cargador = this.def.cargador; if (s.arma === 'especial') s.setArma('primaria'); }
     }
     const obj = this.objetivo;
     if (obj) {
@@ -111,13 +125,13 @@ export class IABot {
       s.quiereAgachar = dh > 25 && obj.tipo !== 'dron';
       this.tApuntando += dt;
       this.tReaccion -= dt;
-      if (obj.tipo === 'vehiculo' && this.rpg > 0 && s.arma !== 'rpg' && this.tRecarga <= 0) s.setArma('rpg');
-      if (obj.tipo !== 'vehiculo' && s.arma === 'rpg') s.setArma('fusil');
+      if (obj.tipo === 'vehiculo' && this.rpg > 0 && s.arma !== 'especial' && this.tRecarga <= 0) s.setArma('especial');
+      if (obj.tipo !== 'vehiculo' && s.arma === 'especial') s.setArma('primaria');
       if (this.tReaccion <= 0 && this.tRecarga <= 0 && Math.abs(wrapAngle(yawObj - s.yaw)) < 0.12) this.disparar(dt, obj);
       // Movimiento lateral leve si está de pie
       if (!s.quiereAgachar) { const lat = Math.sin(J.tiempo * 0.9 + s.id.length) * 0.5; mx = Math.cos(s.yaw) * lat; mz = -Math.sin(s.yaw) * lat; }
     } else {
-      s.arma === 'rpg' && s.setArma('fusil');
+      if (s.arma === 'especial') s.setArma('primaria');
       const dx = this.destino.x - s.pos.x, dz = this.destino.z - s.pos.z, d = Math.hypot(dx, dz);
       if (d < 4) this.destino = this.elegirDestino();
       else {
@@ -140,10 +154,10 @@ export class IABot {
     const s = this.s, J = this.j;
     this.tCad -= dt;
     if (this.tCad > 0) return;
-    if (s.arma === 'rpg') {
+    if (s.arma === 'especial') {
       if (obj.ent.pos.distanceTo(s.pos) > 160 || this.tApuntando < 1.2) return;
       this.rpg--;
-      J.dispararSoldado(s, ARMAS.rpg7, this.error * 0.6, 'rpg');
+      J.dispararSoldado(s, this.defEsp, this.error * 0.6, 'especial');
       this.tRecarga = 4.5;
       this.tCad = 1;
       return;
@@ -151,14 +165,14 @@ export class IABot {
     if (this.balasRafaga <= 0) {
       this.tRafaga -= dt;
       if (this.tRafaga > 0) return;
-      this.balasRafaga = 3 + Math.floor(Math.random() * 5);
+      this.balasRafaga = this.def.auto ? 3 + Math.floor(Math.random() * 5) : 1;
     }
     this.balasRafaga--;
-    if (this.balasRafaga <= 0) this.tRafaga = 0.4 + Math.random() * 0.8;
+    if (this.balasRafaga <= 0) this.tRafaga = this.def.auto ? 0.4 + Math.random() * 0.8 : Math.max(0.6, 60 / this.def.cadencia);
     this.tCad = 60 / this.def.cadencia;
     // El error se reduce cuanto más tiempo lleva apuntando
     const err = this.error * clamp(1.6 - this.tApuntando * 0.35, 0.35, 1.6);
-    J.dispararSoldado(s, this.def, err, 'fusil');
+    J.dispararSoldado(s, this.def, err * (this.def.visor ? 0.35 : 1), 'primaria');
     this.cargador--;
     if (this.cargador <= 0) { this.tRecarga = this.def.recarga; }
   }

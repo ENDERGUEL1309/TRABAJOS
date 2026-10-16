@@ -77,8 +77,9 @@ export class Audio {
   }
 
   // Disparo: ráfaga de ruido filtrado + golpe grave. 'calibre': 1 fusil, 2 ametralladora pesada, 4 cañón.
-  disparo(pos, calibre = 1, propio = false) {
+  disparo(pos, calibre = 1, propio = false, silenciado = false) {
     if (!this.activo) return;
+    if (silenciado) { this.disparoSilenciado(pos, propio); return; }
     const c = this.ctx;
     const d = propio ? 0 : this.oyente.distanceTo(pos);
     const t = c.currentTime + d / VSON;
@@ -107,6 +108,29 @@ export class Audio {
     o.connect(g2).connect(salida);
     o.start(t); o.stop(t + 0.3 * calibre + 0.1);
     if (propio && calibre === 1) this.clic(t + 0.03, 2500, 0.15);
+  }
+
+  disparoSilenciado(pos, propio) {
+    const c = this.ctx, d = propio ? 0 : this.oyente.distanceTo(pos);
+    if (d > 80) return;
+    const t = c.currentTime + d / VSON;
+    const n = this.fuente(this.ruido);
+    const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1800; f.Q.value = 0.7;
+    const g = c.createGain(); g.gain.setValueAtTime(propio ? 0.35 : 0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+    const salida = propio ? this.master : this.panner(pos);
+    if (!propio) salida.connect(this.master);
+    n.connect(f).connect(g).connect(salida);
+    n.start(t, Math.random()); n.stop(t + 0.09);
+    if (propio) this.clic(t + 0.02, 3000, 0.2);
+  }
+
+  // Confirmación de impacto (más grave si es mortal)
+  marcador(mortal = false) {
+    if (!this.activo) return;
+    const c = this.ctx, t = c.currentTime;
+    const o = c.createOscillator(); o.type = 'triangle'; o.frequency.value = mortal ? 520 : 1400;
+    const g = c.createGain(); g.gain.setValueAtTime(0.18, t); g.gain.exponentialRampToValueAtTime(0.001, t + (mortal ? 0.25 : 0.07));
+    o.connect(g).connect(this.master); o.start(t); o.stop(t + 0.3);
   }
 
   clic(t, f = 2000, v = 0.2) {
@@ -215,7 +239,14 @@ export class Audio {
     const gn = c.createGain(); gn.gain.value = tipo === 'dron' ? 0.08 : 0.5;
     n.connect(gn).connect(lp);
     o1.start(); o2.start(); n.start();
-    const base = { diesel: 32, ligero: 45, camion: 38, dron: 190 }[tipo];
+    const base = { diesel: 32, ligero: 45, camion: 38, dron: 190, heli: 21, jet: 95 }[tipo];
+    if (tipo === 'heli') {
+      // Batido de palas: modulación de amplitud a baja frecuencia
+      const lfo = c.createOscillator(); lfo.frequency.value = 18;
+      const lg = c.createGain(); lg.gain.value = 260;
+      lfo.connect(lg).connect(lp.frequency); lfo.start();
+    }
+    if (tipo === 'jet') gn.gain.value = 1.1;
     return {
       set: (pos, rpm, vol) => {
         const t = c.currentTime;

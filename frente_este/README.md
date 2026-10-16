@@ -1,4 +1,4 @@
-# FRENTE ESTE · Beta 0.1
+# FRENTE ESTE · Beta 0.2
 
 Shooter táctico realista para navegador y móvil (gama alta) con **three.js**, ambientado en la guerra ruso-ucraniana. Estética de **cámara corporal** (ojo de pez, aberración cromática, grano, balanceo al caminar), dos bandos y **4 jugadores** (2 contra 2) en la beta.
 
@@ -29,6 +29,16 @@ npm start            # http://localhost:8080  (WebSocket en /ws)
 
 También funciona con mando (Gamepad API).
 
+## Novedades (beta 0.2)
+
+- **Daño corregido en iPhone**: el lienzo 3D medía `100vh`, que en Safari es más alto que la zona visible, así que el punto de mira no coincidía con el centro real de la imagen y los disparos salían por encima. Ahora el lienzo se ajusta al área visible. Además se ha reducido la dispersión desde la cadera, la bala converge en lo que hay bajo la mira (incluidos los soldados), hay puesta a cero automática a la distancia del blanco, marca y sonido de impacto, y asistencia de apuntado suave en pantallas táctiles.
+- **Clases (operadores)**: Asalto, Soporte (reabastece munición a los aliados), Francotirador, Antitanque y Operador de drones. Se eligen en la pantalla de **despliegue**, al empezar y en cada reaparición.
+- **Armas**: AK-74M, AK-12, M4A1, CZ Bren 2, AKS-74U, PKM, RPK-74M, SVD, ORSIS T-5000, Barrett M82A1, Makarov PM, Glock 17, RPG-7, NLAW, RPG-26 y granadas F-1. Hay armas automáticas, semiautomáticas y de cerrojo.
+- **Accesorios**: miras metálicas, colimador, holográfico, ópticas 4× (también PSO-1) y telescópica 8× con retícula y balanceo de respiración; silenciador, compensador y apagallamas; empuñadura vertical o angulada y bípode; cargador ampliado o de recarga rápida.
+- **Mapa completo** (botón MAPA, tecla M o tocar el minimapa): relieve, cuadrícula de 200 m, bases, aliados, vehículos y enemigos avistados.
+- **Dron más fácil**: nuevo modo **ESTABLE** por defecto. Mantiene la altura y el stick izquierdo sube y baja a unos 10 m/s. Siguen disponibles ANGLE y ACRO.
+- **Aeronaves**: helicóptero de ataque **Mi-24** (subir/bajar con mantenimiento de altura, ametralladora YakB-12,7 y cohetes S-8) y avión **Su-25** (arranque en vuelo, cañón GSh-30-2, cohetes S-8 y 4 bombas FAB-250, con opción de eyectar). Se estrellan, se derriban (el ZU-23-2 tiene espoleta de proximidad) y reaparecen en su base.
+
 ## Qué incluye
 
 - **Mapa** de 2,4 × 2,4 km: estepa con campos (arado, rastrojo, girasol), cinturones forestales, barranco, aldea destruida con casas en ruinas y escombros, bloque de viviendas de 5 plantas derrumbado, elevador de grano, tendido eléctrico caído, trincheras en zigzag con revestimiento de tablones y sacos terreros, dientes de dragón, erizos checos, coches calcinados, restos de blindados y columnas de humo. La zona de combate central (640 × 640 m) tiene terreno de alta resolución que **se deforma con las explosiones** (cráteres).
@@ -55,7 +65,10 @@ frente_este/
 │   ├── mundo.js          terreno, vegetación, edificios, colisiones
 │   ├── vehiculos.js      tanque, MT-LB, pick-up ZU-23-2
 │   ├── dron.js           dron FPV
-│   ├── armas.js          armas, vista en 1ª persona, proyectiles
+│   ├── armas.js          vista en 1ª persona, granadas, proyectiles
+│   ├── arsenal.js        armas, accesorios, clases y modelos
+│   ├── aeronaves.js      Mi-24 y Su-25
+│   ├── despliegue.js     pantalla de clases y equipo
 │   ├── soldado.js        modelo y animación del soldado
 │   ├── bots.js           IA
 │   ├── efectos.js        partículas, trazadoras, destellos

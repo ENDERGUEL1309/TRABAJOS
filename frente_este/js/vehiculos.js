@@ -350,7 +350,7 @@ export class Vehiculo {
     }
     // Otros vehículos
     for (const o of this.juego.vehiculos) {
-      if (o === this) continue;
+      if (o === this || (o.aereo && o.enVuelo)) continue;
       const dx = nuevo.x - o.pos.x, dz = nuevo.z - o.pos.z, dd = Math.hypot(dx, dz), m = (d.largo + o.def.largo) * 0.33;
       if (dd < m && dd > 0.01) { nuevo.x = o.pos.x + (dx / dd) * m; nuevo.z = o.pos.z + (dz / dd) * m; choque = true; }
     }

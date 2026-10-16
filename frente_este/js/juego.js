@@ -4,6 +4,9 @@ import * as THREE from 'three';
 import { Mundo } from './mundo.js';
 import { Soldado, FACCIONES } from './soldado.js';
 import { ArmaLocal, Proyectiles, ARMAS } from './armas.js';
+import { CLASES, equipoPorDefecto, estadisticas } from './arsenal.js';
+import { Aeronave, ARMAS_AIRE } from './aeronaves.js';
+import { Despliegue } from './despliegue.js';
 import { Vehiculo, ARMAS_VEH, crearRestos } from './vehiculos.js';
 import { Dron } from './dron.js';
 import { Efectos } from './efectos.js';
@@ -44,8 +47,10 @@ export class Juego {
     this.zoomIdx = 0;
     this.tRed = 0;
     this.idLocal = 'yo';
-    this.dronesRest = 3;
+    this.dronesRest = 1;
+    this.granadas = 2;
     this.tReponer = 0;
+    this.tReabastecer = 0;
     this.texFogonazo = TX.texFogonazo();
   }
 
@@ -62,7 +67,7 @@ export class Juego {
     r.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer = r;
     this.scene = new THREE.Scene();
-    this.camara = new THREE.PerspectiveCamera(this.ajustes.fov, innerWidth / innerHeight, 0.03, 5000);
+    this.camara = new THREE.PerspectiveCamera(this.ajustes.fov, 16 / 9, 0.03, 6000);
     this.scene.add(this.camara);
     this.camaraActiva = this.camara;
 
@@ -82,6 +87,7 @@ export class Juego {
     for (const fac of ['UA', 'RU']) {
       const B = this.mundo.bases[fac];
       for (const v of B.vehiculos) this.vehiculos.push(new Vehiculo(this, { id: 'v' + n++, tipo: v.tipo, faccion: fac, x: v.x, z: v.z, yaw: B.yaw }));
+      for (const a of B.aeronaves) this.vehiculos.push(new Aeronave(this, { id: 'v' + n++, tipo: a.tipo, faccion: fac, x: a.x, z: a.z, yaw: B.yaw }));
     }
     crearRestos(this, 'tanque', 'RU', 35, 140, 0.8);
     crearRestos(this, 'mtlb', 'RU', 105, -25, 2.2);
@@ -103,12 +109,21 @@ export class Juego {
     this.local = new Soldado({ id: this.idLocal, nombre: this.opc.nombre, faccion, esLocal: true });
     this.soldados.set(this.local.id, this.local);
     this.scene.add(this.local.raiz);
-    this.arma = new ArmaLocal(this, faccion, FACCIONES[faccion].primaria);
+    this.equipo = this.cargarEquipo(faccion);
+    this.local.setEquipo(this.equipo);
+    this.arma = new ArmaLocal(this, faccion, this.equipo);
     this.camara.add(this.arma.grupo);
     document.getElementById('bcId').textContent = `CÁM. CORPORAL · ${this.opc.nombre.toUpperCase()} · ${FACCIONES[faccion].nombre.toUpperCase()}`;
     if (!this.red) this.crearBots(faccion);
     this.hud = new HUD(this);
-    this.reaparecer();
+    this.despliegue = new Despliegue(this);
+    this.estado = 'despliegue';
+    this.local.vivo = false;
+    this.local.raiz.visible = false;
+    this.arma.grupo.visible = false;
+    this.entrada.setModo('menu');
+    this.hud.setModo('despliegue');
+    this.despliegue.abrir();
 
     await paso('Compilando sombreadores…');
     this.alRedimensionar();
@@ -136,12 +151,34 @@ export class Juego {
   }
 
   alRedimensionar() {
-    const w = innerWidth, h = innerHeight;
+    const [w, h] = this.tamano();
     const pr = Math.min(devicePixelRatio, this.calidad.pr);
     this.renderer.setPixelRatio(pr);
     this.renderer.setSize(w, h, false);
     for (const c of [this.camara, ...[...this.drones.values()].map((d) => d.camara)]) { c.aspect = w / h; c.updateProjectionMatrix(); }
     this.postfx.resize(w, h, pr);
+  }
+
+  // Tamaño real del lienzo (en iPhone 100vh no coincide con la zona visible)
+  tamano() {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    return [Math.max(1, Math.round(r.width)), Math.max(1, Math.round(r.height))];
+  }
+
+  cargarEquipo(faccion) {
+    let guardado = null;
+    try { guardado = JSON.parse(localStorage.getItem('frenteEste.equipo.' + faccion) || 'null'); } catch { /* sin almacenamiento */ }
+    if (guardado && CLASES[guardado.clase] && ARMAS[guardado.primaria]) return guardado;
+    return equipoPorDefecto('asalto', faccion);
+  }
+
+  // Aplica la clase y el equipo elegidos en la pantalla de despliegue y reaparece
+  desplegar(eq) {
+    this.equipo = eq;
+    try { localStorage.setItem('frenteEste.equipo.' + this.local.faccion, JSON.stringify(eq)); } catch { /* */ }
+    this.local.setEquipo(eq);
+    this.arma.equipar(eq);
+    this.reaparecer();
   }
 
   // ---------------------------------------------------------------- bucle
@@ -150,12 +187,15 @@ export class Juego {
     this.tiempo += dt;
     const e = this.entrada.leer(dt);
     if (e.flancos.has('marcador')) { this.verTabla = !this.verTabla; e.flancos.delete('marcador'); }
+    if (e.flancos.has('mapa')) { this.hud.alternarMapa(); e.flancos.delete('mapa'); }
     this.hud.tabla(this.verTabla || this.entrada.teclas.has('Tab'));
 
     if (this.estado === 'infanteria') this.actualizarInfanteria(dt, e);
     else if (this.estado === 'vehiculo') this.actualizarVehiculoLocal(dt, e);
     else if (this.estado === 'dron') this.actualizarDronLocal(dt, e);
+    else if (this.estado === 'aeronave') this.actualizarAeronaveLocal(dt, e);
     else if (this.estado === 'muerto') this.actualizarMuerto(dt, e);
+    else if (this.estado === 'despliegue') this.actualizarDespliegue(dt);
     this.entrada.limpiarFlancos();
 
     // Bots y soldados remotos
@@ -199,7 +239,8 @@ export class Juego {
 
   posFoco() {
     if (this.estado === 'dron' && this.dronLocal) return this.dronLocal.pos;
-    if (this.estado === 'vehiculo' && this.vehLocal) return this.vehLocal.pos;
+    if ((this.estado === 'vehiculo' || this.estado === 'aeronave') && this.vehLocal) return this.vehLocal.pos;
+    if (this.estado === 'despliegue') return this.camara.position;
     return this.local.pos;
   }
 
@@ -216,12 +257,15 @@ export class Juego {
     this.vista.yaw -= e.vistaX * sens;
     this.vista.pitch = clamp(this.vista.pitch - e.vistaY * sens, -1.45, 1.45);
     A.inercia(e.vistaX, e.vistaY);
+    if (this.entrada.tactil && (e.apuntar || e.disparar)) this.asistenciaPunteria(dt, e.apuntar);
     // Acciones
     if (e.flancos.has('agachar')) s.quiereAgachar = !s.quiereAgachar;
-    if (e.flancos.has('cambiarArma')) A.setArma(A.actual === 'fusil' ? 'rpg' : 'fusil');
-    if (e.flancos.has('arma1')) A.setArma('fusil');
-    if (e.flancos.has('arma2')) A.setArma('rpg');
+    if (e.flancos.has('cambiarArma')) A.siguiente();
+    if (e.flancos.has('arma1')) A.setArma('primaria');
+    if (e.flancos.has('arma2')) A.setArma('secundaria');
+    if (e.flancos.has('arma3')) A.setArma('especial');
     if (e.flancos.has('recargar')) A.recargar();
+    if (e.flancos.has('granada')) this.lanzarGranada();
     s.setArma(A.actual);
     const corriendo = e.correr && e.movY > 0.3 && !s.quiereAgachar && A.apuntado < 0.3;
     if (corriendo) s.quiereAgachar = false;
@@ -229,7 +273,7 @@ export class Juego {
     // Movimiento en el plano según la vista
     const fy = this.vista.yaw;
     const wx = Math.cos(fy) * e.movX - Math.sin(fy) * e.movY, wz = -Math.sin(fy) * e.movX - Math.cos(fy) * e.movY;
-    const vmax = corriendo ? 5.8 : s.quiereAgachar ? 1.7 : A.apuntado > 0.5 ? 2.0 : 3.3;
+    const vmax = (corriendo ? 5.8 : s.quiereAgachar ? 1.7 : A.apuntado > 0.5 ? 2.0 : 3.3) * (A.def.velMov || 1);
     this.moverSoldado(s, wx, wz, vmax, dt, true);
     s.yaw = this.vista.yaw; s.pitch = this.vista.pitch;
     const moviendo = Math.hypot(s.vel.x, s.vel.z) > 0.6;
@@ -248,10 +292,16 @@ export class Juego {
     if (e.flancos.has('dron')) this.lanzarDron();
     // Reabastecimiento en la base propia
     const B = this.mundo.bases[s.faccion];
+    const C = CLASES[this.equipo.clase];
     if (Math.abs(s.pos.x - B.x) < 30 && Math.abs(s.pos.z) < 60 && (this.tReponer -= dt) <= 0) {
       this.tReponer = 8;
-      const e2 = A.estado;
-      if (e2.fusil.reserva < A.defs.fusil.cargador * 3 || e2.rpg.reserva < 1 || this.dronesRest < 3) { A.reponer(); this.dronesRest = 3; this.hud.mensaje('Munición y drones repuestos', 2); }
+      if (A.reabastecer() || this.dronesRest < C.drones || this.granadas < C.granadas) { A.reponer(); this.dronesRest = C.drones; this.granadas = C.granadas; this.hud.mensaje('Munición, granadas y drones repuestos', 2); }
+    }
+    // El soporte reparte munición a los aliados cercanos (y a sí mismo, poco a poco)
+    if ((this.tReabastecer -= dt) <= 0) {
+      this.tReabastecer = 10;
+      const cercaSoporte = [...this.soldados.values()].some((o) => o.vivo && o.faccion === s.faccion && o.clase === 'soporte' && o.pos.distanceTo(s.pos) < 8);
+      if ((C.reabastece || cercaSoporte) && A.reabastecer()) this.hud.mensaje('+ Munición (soporte)', 1.5);
     }
     this.camaraInfanteria(dt, moviendo, corriendo);
   }
@@ -272,9 +322,18 @@ export class Juego {
     this.sacudida = Math.max(0, this.sacudida - dt * 2.5);
     const roll = Math.sin(s.fase) * 0.018 * amp * bob + (Math.random() - 0.5) * sac * 0.05;
     c.rotation.set(this.vista.pitch + Math.sin(s.fase * 2) * 0.006 * amp * bob + (Math.random() - 0.5) * sac * 0.06, this.vista.yaw + (Math.random() - 0.5) * sac * 0.06, roll, 'YXZ');
-    const fovObj = this.ajustes.fov - (this.ajustes.fov - A.def.fov) * ap + (corriendo ? 4 : 0);
-    if (Math.abs(c.fov - fovObj) > 0.05) { c.fov = damp(c.fov, fovObj, 12, dt); c.updateProjectionMatrix(); }
-    this.postfx.setPerfil(ap > 0.6 ? 'apuntando' : 'bodycam');
+    const d = A.def;
+    const zoom = 1 + (d.zoom - 1) * ap;
+    const fovObj = this.ajustes.fov / zoom + (corriendo ? 4 : 0);
+    if (Math.abs(c.fov - fovObj) > 0.05) { c.fov = d.visor ? fovObj : damp(c.fov, fovObj, 12, dt); c.updateProjectionMatrix(); }
+    const enVisor = d.visor && ap > 0.85;
+    if (enVisor) {
+      // Balanceo de la respiración en la óptica (menor agachado o con bípode)
+      const k = (s.quiereAgachar ? 0.4 : 1) * (d.bipode && s.quiereAgachar ? 0.4 : 1) * 0.004 * (d.zoom / 4);
+      c.rotation.x += Math.sin(this.tiempo * 1.3) * k; c.rotation.y += Math.sin(this.tiempo * 0.9 + 1) * k;
+    }
+    this.hud.visor(enVisor ? d.reticula : null);
+    this.postfx.setPerfil(enVisor ? 'visorFusil' : ap > 0.6 ? 'apuntando' : 'bodycam');
     void v;
   }
 
@@ -319,27 +378,66 @@ export class Juego {
 
   disparoLocal(d) {
     const s = this.local;
-    const def = d.def, clave = d.arma === 'rpg' ? 'rpg7' : FACCIONES[s.faccion].primaria;
-    this.lanzarProyectil(clave, d.origen, d.dir, s.id, s.faccion, true);
-    this.audio.disparo(d.origen, def.cohete ? 3 : 1, true);
-    this.efectos.destello(d.origen, def.cohete ? 200 : 30, 0.05, '#ffb070', 12);
+    const def = d.def, clave = d.arma;
+    this.lanzarProyectil(clave, d.origen, d.dir, s.id, s.faccion, true, def);
+    this.audio.disparo(d.origen, def.cohete ? 3 : def.calibre, true, def.silenciador);
+    if (!def.silenciador) this.efectos.destello(d.origen, def.cohete ? 200 : 30, 0.05, '#ffb070', 12);
     if (def.cohete) { this.efectos.rebufo(d.origen, d.dir); this.sacudida = Math.max(this.sacudida, 0.5); }
     // Retroceso de la vista
     const r = def.retroceso * (this.arma.apuntado > 0.6 ? 0.7 : 1) * (s.quiereAgachar ? 0.75 : 1);
     this.vista.pitch += r * (0.7 + Math.random() * 0.4);
     this.vista.yaw += (Math.random() - 0.5) * r * 0.8;
-    if (this.red) this.red.evento({ k: 'disp', c: clave, o: v3(d.origen), d: v3(d.dir, 1000) });
+    if (this.red) this.red.evento({ k: 'disp', c: clave, o: v3(d.origen), d: v3(d.dir, 1000), s: def.silenciador ? 1 : 0 });
+  }
+
+  // Asistencia de apuntado en pantallas táctiles: atracción suave hacia el enemigo más cercano a la mira
+  asistenciaPunteria(dt, apuntando) {
+    const c = this.camara, s = this.local;
+    const ojo = c.position;
+    let mejor = null, angMejor = apuntando ? 0.09 : 0.05;
+    for (const o of this.soldados.values()) {
+      if (!o.vivo || o.faccion === s.faccion || o.enVehiculo) continue;
+      const dx = o.pos.x - ojo.x, dy = o.pos.y + 1.25 - o.agachado * 0.45 - ojo.y, dz = o.pos.z - ojo.z;
+      const dist = Math.hypot(dx, dy, dz);
+      if (dist > 250) continue;
+      const yaw = Math.atan2(-dx, -dz), pitch = Math.atan2(dy, Math.hypot(dx, dz));
+      const ang = Math.hypot(wrapAngle(yaw - this.vista.yaw), pitch - this.vista.pitch);
+      if (ang < angMejor) { angMejor = ang; mejor = { yaw, pitch }; }
+    }
+    if (!mejor) return;
+    const k = Math.min(1, dt * (apuntando ? 5 : 2.5));
+    this.vista.yaw += wrapAngle(mejor.yaw - this.vista.yaw) * k;
+    this.vista.pitch += (mejor.pitch - this.vista.pitch) * k;
+  }
+
+  lanzarGranada() {
+    if (this.granadas <= 0) { this.hud.mensaje('Sin granadas', 1.2); return; }
+    this.granadas--;
+    const c = this.camara;
+    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(c.quaternion);
+    dir.y += 0.25; dir.normalize();
+    const o = c.position.clone().addScaledVector(dir, 0.5);
+    this.lanzarProyectil('f1', o, dir, this.local.id, this.local.faccion, true);
+    this.audio.clic(this.audio.ctx?.currentTime || 0, 600, 0.3);
+    this.hud.mensaje(`Granada · quedan ${this.granadas}`, 1.2);
+    if (this.red) this.red.evento({ k: 'disp', c: 'f1', o: v3(o), d: v3(dir, 1000) });
   }
 
   // Crea un proyectil a partir de la clave del arma (infantería o vehículo)
-  lanzarProyectil(clave, origen, dir, duenoId, faccion, autoritativo) {
+  lanzarProyectil(clave, origen, dir, duenoId, faccion, autoritativo, def = null) {
     let p;
-    if (ARMAS[clave]) {
-      const a = ARMAS[clave];
+    if (clave === 'f1') {
+      p = { tipo: 'granada', vel: 17, danoSold: 160, dano: { pesado: 5, ligero: 60, ninguno: 120 }, radio: 9, explota: true, arma: 'Granada F-1' };
+    } else if (ARMAS_AIRE[clave]) {
+      const a = ARMAS_AIRE[clave];
+      this.contDisp = (this.contDisp || 0) + 1;
+      p = { tipo: a.tipo, vel: a.vel, velMax: a.velMax || a.vel, danoSold: a.danoSold, dano: a.dano, radio: a.radio, explota: !!a.explota, trazadora: a.trazadora ? this.contDisp % a.trazadora === 0 : false, arma: a.nombre, cebo: false };
+    } else if (ARMAS[clave]) {
+      const a = def || ARMAS[clave];
       this.contDisp = (this.contDisp || 0) + 1;
       p = a.cohete
         ? { tipo: 'cohete', vel: a.vel, velMax: a.velMax, danoSold: a.danoSold, dano: a.dano, radio: a.radio, explota: true, arma: a.nombre }
-        : { tipo: 'bala', vel: a.vel, danoSold: a.danoSold, dano: a.dano, trazadora: this.contDisp % a.trazadora === 0, arma: a.nombre, calibre: 1 };
+        : { tipo: 'bala', vel: a.vel, danoSold: a.danoSold, dano: a.dano, trazadora: a.trazadora ? this.contDisp % a.trazadora === 0 : false, arma: a.nombre, calibre: a.calibre };
     } else {
       const [k, sub] = clave.split(':');
       const a = ARMAS_VEH[k];
@@ -352,6 +450,8 @@ export class Juego {
       }
     }
     Object.assign(p, { origen, dir, duenoId, faccion, local: autoritativo });
+    const dueno = this.soldados.get(duenoId);
+    if (dueno?.enVehiculo && (p.tipo === 'bomba' || p.tipo === 'cohete')) { const v = this.vehiculos.find((x) => x.id === dueno.enVehiculo); if (v?.vel) p.velInicial = v.vel.clone(); }
     return this.proyectiles.disparar(p);
   }
 
@@ -361,19 +461,23 @@ export class Juego {
     dir.x += (Math.random() - 0.5) * 2 * error; dir.y += (Math.random() - 0.5) * 2 * error; dir.z += (Math.random() - 0.5) * 2 * error;
     dir.normalize();
     const origen = s.ojos(new THREE.Vector3()).add(new THREE.Vector3(Math.cos(s.yaw) * 0.15, -0.15, -Math.sin(s.yaw) * 0.15)).addScaledVector(dir, 0.7);
-    const clave = arma === 'rpg' ? 'rpg7' : FACCIONES[s.faccion].primaria;
-    this.lanzarProyectil(clave, origen, dir, s.id, s.faccion, true);
-    this.efectoDisparoRemoto(s, origen, dir, clave);
+    const clave = s.equipo[arma] || s.equipo.primaria;
+    this.lanzarProyectil(clave, origen, dir, s.id, s.faccion, true, def);
+    this.efectoDisparoRemoto(s, origen, dir, clave, def.silenciador);
   }
 
-  efectoDisparoRemoto(s, origen, dir, clave) {
-    const cohete = clave === 'rpg7';
-    this.efectos.fogonazo(origen, cohete ? 1.2 : 0.5);
-    this.efectos.destello(origen, cohete ? 150 : 25, 0.05, '#ffb070', 10);
-    if (cohete) this.efectos.rebufo(origen, dir);
-    const cal = cohete ? 3 : clave.startsWith('canon') ? 4 : clave === 'zu23' ? 2.2 : clave === 'kpvt' ? 2 : 1;
-    this.audio.disparo(origen, cal, false);
-    if (s && s.faccion !== this.local?.faccion && origen.distanceTo(this.local.pos) < 250) this.hud?.avistar(s.id);
+  efectoDisparoRemoto(s, origen, dir, clave, silenciado = false) {
+    if (clave === 'f1') return;
+    const a = ARMAS[clave];
+    const cohete = !!a?.cohete || clave === 's8';
+    if (!silenciado) {
+      this.efectos.fogonazo(origen, cohete ? 1.2 : 0.5);
+      this.efectos.destello(origen, cohete ? 150 : 25, 0.05, '#ffb070', 10);
+    }
+    if (a?.cohete) this.efectos.rebufo(origen, dir);
+    const cal = cohete ? 3 : clave.startsWith('canon') ? 4 : clave === 'zu23' ? 2.2 : clave === 'kpvt' ? 2 : ARMAS_AIRE[clave]?.calibre || a?.calibre || 1;
+    if (clave !== 'fab250') this.audio.disparo(origen, cal, false, silenciado);
+    if (s && !silenciado && s.faccion !== this.local?.faccion && origen.distanceTo(this.local.pos) < 250) this.hud?.avistar(s.id);
   }
 
   // ---------------------------------------------------------------- vehículos
@@ -390,21 +494,36 @@ export class Juego {
     s.enVehiculo = v.id;
     s.raiz.visible = false;
     this.arma.grupo.visible = false;
+    this.primeraPersona = false;
+    this.zoomIdx = 0;
+    this.hud.el.aviso.textContent = '';
+    if (v.aereo) {
+      this.estado = 'aeronave';
+      v.alSubir();
+      this.entrada.setModo(v.tipo === 'avion' ? 'avion' : 'heli');
+      this.entrada.setEtiqueta('interactuar', v.tipo === 'avion' ? 'EYECTAR' : 'BAJAR', true);
+      this.hud.setModo('vehiculo');
+      this.hud.mensaje(v.tipo === 'avion' ? `${v.nombre} · Gas y timón a la izq. · cabeceo/alabeo a la der.` : `${v.nombre} · Subir/bajar y giro a la izq. · cíclico a la der.`, 4);
+      return;
+    }
     v.apYaw = v.yaw + v.torYaw;
     v.apPitch = 0;
     this.estado = 'vehiculo';
-    this.primeraPersona = false;
-    this.zoomIdx = 0;
     this.entrada.setModo(v.def.oruga ? 'oruga' : 'ruedas');
     this.entrada.setEtiqueta('interactuar', 'BAJAR', true);
     this.hud.setModo('vehiculo');
-    this.hud.el.aviso.textContent = '';
     this.hud.mensaje(`${v.nombre} · ${v.def.oruga ? 'Orugas: palanca izq./der.' : 'Acelerador izq. · dirección der.'}`, 3);
   }
 
   bajar(forzado = false) {
     const v = this.vehLocal, s = this.local;
     if (!v) return;
+    if (v.aereo && v.enVuelo) {
+      // Eyección / salto: aparece en el suelo bajo la aeronave
+      const x = v.pos.x, z = v.pos.z;
+      s.pos.set(x, this.mundo.getHeight(x, z), z);
+      v.alBajar(true);
+    } else if (v.aereo) v.alBajar(false);
     // Buscar un hueco libre a los lados
     const lados = [[-1, 0], [1, 0], [0, 1], [0, -1]];
     const c = Math.cos(v.yaw), sn = Math.sin(v.yaw);
@@ -415,9 +534,10 @@ export class Juego {
       this.mundo.resolverCirculo(q, 0.35, this.mundo.getHeight(p.x, p.z), 1.7);
       if (Math.hypot(q.x - p.x, q.z - p.z) < 0.05 || lx === 0 && lz === -1) { s.pos.set(q.x, this.mundo.getHeight(q.x, q.z), q.z); break; }
     }
+    if (v.aereo && v.enVuelo) s.pos.set(v.pos.x, this.mundo.getHeight(v.pos.x, v.pos.z), v.pos.z);
     v.conductor = null;
     v.local = false;
-    v.canon.visible = true;
+    if (v.canon) v.canon.visible = true;
     s.enVehiculo = null;
     s.raiz.visible = false;
     this.arma.grupo.visible = true;
@@ -425,7 +545,7 @@ export class Juego {
     if (this.red) this.red.enviar({ t: 'bajar', vid: v.id });
     if (s.vivo) {
       this.estado = 'infanteria';
-      this.vista.yaw = v.yaw + v.torYaw; this.vista.pitch = 0;
+      this.vista.yaw = v.yaw + (v.torYaw || 0); this.vista.pitch = 0;
       this.entrada.setModo('infanteria');
       this.hud.setModo('infanteria');
       this.camara.fov = this.ajustes.fov; this.camara.updateProjectionMatrix();
@@ -510,7 +630,8 @@ export class Juego {
     const proyectar = (p) => {
       const q = p.clone().project(c);
       if (q.z > 1) return null;
-      return [(q.x * 0.5 + 0.5) * innerWidth, (-q.y * 0.5 + 0.5) * innerHeight];
+      const [w, h] = this.tamano();
+      return [(q.x * 0.5 + 0.5) * w, (-q.y * 0.5 + 0.5) * h];
     };
     const boca = v.boca.getWorldPosition(new THREE.Vector3());
     const dArma = v.dirArma(new THREE.Vector3());
@@ -575,10 +696,84 @@ export class Juego {
 
   sonidoVehiculo(v, encendido) {
     if (!encendido) { if (v.sonido) { v.sonido.set(v.pos, 0, 0); } return; }
-    if (!v.sonido) v.sonido = this.audio.motor(v.tipo === 'tanque' ? 'diesel' : v.tipo === 'mtlb' ? 'ligero' : 'camion');
+    if (!v.sonido) v.sonido = this.audio.motor({ tanque: 'diesel', mtlb: 'ligero', tecnica: 'camion', heli: 'heli', avion: 'jet' }[v.tipo]);
     if (!v.sonido) return;
+    if (v.aereo) { v.sonido.set(v.pos, v.rpm(), v === this.vehLocal ? 0.6 : 1.3); return; }
     const rpm = Math.min(1, Math.abs(v.velActual || 0) / v.def.vmax + (v.def.oruga ? Math.abs(v.vI - v.vD) / v.def.vmax * 0.5 : 0));
     v.sonido.set(v.pos, rpm, v === this.vehLocal ? 0.55 : 0.9);
+  }
+
+  // ---------------------------------------------------------------- aeronaves
+  actualizarAeronaveLocal(dt, e) {
+    const v = this.vehLocal, c = this.camara;
+    if (!v || v.destruido) { this.bajar(true); return; }
+    if (e.flancos.has('camara')) this.primeraPersona = !this.primeraPersona;
+    if (e.flancos.has('interactuar')) { this.bajar(); return; }
+    const res = v.simular(dt, e);
+    this.local.pos.copy(v.pos);
+    this.sonidoVehiculo(v, true);
+    if (res?.choque) { this.danoVehiculo(v, 99999, this.local.id); return; }
+    // Armas fijas hacia delante
+    v.tCad -= dt; v.tCohete -= dt;
+    const fwd = v.adelante(new THREE.Vector3());
+    const yo = this.local;
+    const disparar = (clave, punto, disp) => {
+      const o = v.puntoMundo(punto);
+      const d = fwd.clone();
+      d.x += (Math.random() - 0.5) * disp; d.y += (Math.random() - 0.5) * disp; d.z += (Math.random() - 0.5) * disp;
+      d.normalize();
+      this.lanzarProyectil(clave, o, d, yo.id, yo.faccion, true);
+      this.efectoDisparoRemoto(yo, o, d, clave);
+      if (this.red) this.red.evento({ k: 'disp', c: clave, o: v3(o), d: v3(d, 1000) });
+    };
+    const A = v.def.armas;
+    if (e.disparar && v.tCad <= 0 && v.municion.canon > 0) {
+      v.tCad = 60 / ARMAS_AIRE[A.canon].cadencia; v.municion.canon--;
+      disparar(A.canon, v.def.bocaCanon, 0.008);
+      this.sacudida = Math.max(this.sacudida, 0.12);
+    }
+    if (e.cohetes && v.tCohete <= 0 && v.municion.cohetes > 0) {
+      v.tCohete = 0.12; v.municion.cohetes--;
+      v.ladoCohete = -(v.ladoCohete || 1);
+      disparar('s8', v.def.bocaCohetes.clone().setX(v.def.bocaCohetes.x * v.ladoCohete), 0.02);
+    }
+    if (e.flancos.has('bomba') && v.municion.bombas > 0) {
+      v.municion.bombas--;
+      const o = v.puntoMundo(new THREE.Vector3(0, -1.2, 0));
+      this.lanzarProyectil('fab250', o, new THREE.Vector3(0, -1, 0), yo.id, yo.faccion, true);
+      if (this.red) this.red.evento({ k: 'disp', c: 'fab250', o: v3(o), d: [0, -1, 0] });
+      this.hud.mensaje(`Bomba lanzada · quedan ${v.municion.bombas}`, 1.5);
+    }
+    // Cámara
+    if (this.primeraPersona) {
+      c.position.copy(v.puntoMundo(v.def.cabina));
+      c.quaternion.copy(v.q);
+      if (c.fov !== this.ajustes.fov) { c.fov = this.ajustes.fov; c.updateProjectionMatrix(); }
+      this.postfx.setPerfil('vehiculo3');
+    } else {
+      const atras = v.tipo === 'avion' ? v.vel.clone().normalize() : fwd.clone().setY(0).normalize();
+      if (atras.lengthSq() < 0.1) atras.copy(fwd);
+      const dist = v.def.cam3.dist;
+      c.position.copy(v.pos).addScaledVector(atras, -dist).add(new THREE.Vector3(0, v.def.cam3.alto, 0));
+      c.position.y = Math.max(c.position.y, this.mundo.getHeight(c.position.x, c.position.z) + 1);
+      c.lookAt(v.pos.clone().addScaledVector(fwd, 25));
+      if (c.fov !== this.ajustes.fov) { c.fov = this.ajustes.fov; c.updateProjectionMatrix(); }
+      this.postfx.setPerfil('vehiculo3');
+    }
+    const sac = this.sacudida; this.sacudida = Math.max(0, sac - dt * 2);
+    if (sac > 0) { c.rotation.x += (Math.random() - 0.5) * sac * 0.02; c.rotation.y += (Math.random() - 0.5) * sac * 0.02; }
+    c.updateMatrixWorld();
+    // Punto de impacto previsto del cañón
+    const boca = v.puntoMundo(v.def.bocaCanon);
+    const h = this.mundo.segmento(boca, boca.clone().addScaledVector(fwd, 1500), 6);
+    const p = h ? h.p : boca.clone().addScaledVector(fwd, 1500);
+    const q = p.clone().project(c);
+    const [w, hh] = this.tamano();
+    const alt = Math.max(0, v.pos.y - this.mundo.getHeight(v.pos.x, v.pos.z));
+    this.hud.vehiculo(v, {
+      primera: false, municion: `ALT ${alt.toFixed(0)} m · ${v.tipo === 'avion' ? 'GAS ' + Math.round(v.gas * 100) + '%' : 'V ' + Math.round(v.vel.y * 10) / 10 + ' m/s'}  |  ${ARMAS_AIRE[A.canon].nombre} ${v.municion.canon} · S-8 ${v.municion.cohetes}${v.def.bombas ? ' · FAB ' + v.municion.bombas : ''}`,
+      carga: 1, mira: q.z < 1 ? [(q.x * 0.5 + 0.5) * w, (-q.y * 0.5 + 0.5) * hh] : null, deseo: null,
+    });
   }
 
   // ---------------------------------------------------------------- dron
@@ -589,10 +784,12 @@ export class Juego {
     const s = this.local;
     const id = s.id + '_d' + Math.floor(Math.random() * 1e6);
     const d = new Dron(this, { id, duenoId: s.id, faccion: s.faccion });
-    d.camara.aspect = innerWidth / innerHeight; d.camara.updateProjectionMatrix();
+    const [tw, th] = this.tamano();
+    d.camara.aspect = tw / th; d.camara.updateProjectionMatrix();
+    d.bateriaMult = CLASES[this.equipo.clase].bateriaDron || 1;
     const p = s.pos.clone().add(new THREE.Vector3(-Math.sin(this.vista.yaw) * 1.2, 1.3, -Math.cos(this.vista.yaw) * 1.2));
     d.lanzar(p, this.vista.yaw);
-    d.modo = this.ajustes.modoDron || 'ANGLE';
+    d.modo = this.ajustes.modoDron || 'ESTABLE';
     this.drones.set(id, d);
     this.dronLocal = d;
     s.quiereAgachar = true;
@@ -601,7 +798,7 @@ export class Juego {
     this.estado = 'dron';
     this.entrada.setModo('dron');
     // Gas al punto de vuelo estacionario para el lanzamiento a mano
-    this.entrada.acelDron = 0.5; this.entrada.joys.dronI.y = 0; this.entrada.joys.dronI.pintar();
+    this.entrada.configurarDron(d.modo);
     this.entrada.setEtiqueta('modoVuelo', d.modo, true);
     this.camaraActiva = d.camara;
     this.postfx.setCamara(d.camara);
@@ -614,7 +811,13 @@ export class Juego {
   actualizarDronLocal(dt, e) {
     const d = this.dronLocal, s = this.local;
     if (!d) { this.volverDeDron(); return; }
-    if (e.flancos.has('modoVuelo')) { d.modo = d.modo === 'ANGLE' ? 'ACRO' : 'ANGLE'; this.ajustes.modoDron = d.modo; this.entrada.setEtiqueta('modoVuelo', d.modo, true); }
+    if (e.flancos.has('modoVuelo')) {
+      d.modo = { ESTABLE: 'ANGLE', ANGLE: 'ACRO', ACRO: 'ESTABLE' }[d.modo];
+      this.ajustes.modoDron = d.modo;
+      this.entrada.configurarDron(d.modo);
+      this.entrada.setEtiqueta('modoVuelo', d.modo, true);
+      this.hud.mensaje({ ESTABLE: 'ESTABLE: mantiene altura · stick izq. arriba/abajo sube y baja', ANGLE: 'ANGLE: autonivelado, gas manual', ACRO: 'ACRO: control por velocidad angular (experto)' }[d.modo], 2.5);
+    }
     // El operador permanece agachado e inmóvil
     this.moverSoldado(s, 0, 0, 0, dt);
     const r = d.simular(dt, e, s.pos);
@@ -668,8 +871,19 @@ export class Juego {
     c.lookAt(s.pos.x, s.pos.y + 0.3, s.pos.z);
     this.postfx.setPerfil('bodycam');
     this.hud.muerte(this.textoMuerte, this.tMuerto);
-    if (this.tMuerto <= 0) this.reaparecer();
+    if (this.tMuerto <= 0) { this.estado = 'despliegue'; this.hud.setModo('despliegue'); this.despliegue.abrir(); }
     void e;
+  }
+
+  // Vista aérea lenta del frente mientras se elige el equipo
+  actualizarDespliegue(dt) {
+    const c = this.camara, t = this.tiempo * 0.03;
+    const B = this.mundo.bases[this.local.faccion];
+    c.position.set(B.x * 0.6 + Math.cos(t) * 120, 140, Math.sin(t) * 120);
+    c.lookAt(0, 0, 0);
+    if (c.fov !== 60) { c.fov = 60; c.updateProjectionMatrix(); }
+    this.postfx.setPerfil('vehiculo3');
+    void dt;
   }
 
   reaparecer() {
@@ -681,9 +895,13 @@ export class Juego {
     s.quiereAgachar = false;
     this.vista.yaw = B.yaw; this.vista.pitch = 0;
     this.arma.reponer();
-    this.arma.setArma('fusil');
+    this.arma.setArma('primaria', true);
     this.arma.grupo.visible = true;
-    this.dronesRest = 3;
+    const C = CLASES[this.equipo.clase];
+    this.dronesRest = C.drones;
+    this.granadas = C.granadas;
+    s.clase = this.equipo.clase;
+    this.entrada.setEtiqueta('dron', 'DRON FPV', C.drones > 0);
     this.estado = 'infanteria';
     this.camaraActiva = this.camara;
     this.postfx.setCamara(this.camara);
@@ -702,7 +920,7 @@ export class Juego {
       s.protegido = 3;
       s.tReaparecer = 0;
       const ia = this.bots.find((b) => b.s === s);
-      if (ia) { ia.rpg = 2; ia.cargador = ia.def.cargador; ia.objetivo = null; ia.destino = ia.elegirDestino(); s.setArma('fusil'); }
+      if (ia) { ia.equipar(); ia.objetivo = null; ia.destino = ia.elegirDestino(); }
     }
   }
 
@@ -753,7 +971,7 @@ export class Juego {
     }
     if (b.explota) {
       if (!b.local) return; // la explosión autoritativa llega por red
-      this.explosion(imp.p.clone().addScaledVector(imp.n, 0.3), { radio: b.radio, danoSold: b.danoSold, dano: b.dano, duenoId: b.duenoId, faccion: b.faccion, directo: imp.vehiculo || null, tam: b.tipo === 'obus' ? 1.6 : 1, arma: b.arma });
+      this.explosion(imp.p.clone().addScaledVector(imp.n, 0.3), { radio: b.radio, danoSold: b.danoSold, dano: b.dano, duenoId: b.duenoId, faccion: b.faccion, directo: imp.vehiculo || null, tam: { obus: 1.6, bomba: 3.2, granada: 0.8 }[b.tipo] || 1, arma: b.arma });
       if (imp.soldado) this.danoSoldado(imp.soldado, 300, b.duenoId, b.arma, imp.n);
       if (imp.dron) this.derribarDron(imp.dron, b.duenoId);
       return;
@@ -811,7 +1029,7 @@ export class Juego {
     if (!s.vivo || dano <= 0) return;
     const atacante = this.soldados.get(atacanteId);
     if (atacante && atacante !== s && atacante.faccion === s.faccion) return; // sin fuego amigo
-    if (atacanteId === this.idLocal && s !== this.local) this.hud.impacto(s.vida - dano <= 0);
+    if (atacanteId === this.idLocal && s !== this.local) { this.hud.impacto(s.vida - dano <= 0); this.audio.marcador(s.vida - dano <= 0); }
     if (s.esLocal || s.esBot) this.aplicarDano(s, dano, atacanteId, arma, dir);
     else if (this.red) this.red.evento({ k: 'golpe', obj: s.id, d: Math.round(dano), a: arma, dir: v3(dir, 100) });
   }
@@ -949,7 +1167,8 @@ export class Juego {
     s.pitch += (st.pi - s.pitch) * k;
     s.quiereAgachar = !!st.ag;
     s.vida = st.hp;
-    if (s.arma !== (st.ar ? 'rpg' : 'fusil')) s.setArma(st.ar ? 'rpg' : 'fusil');
+    if (st.eq && st.eq !== s._eqClave) { s._eqClave = st.eq; const [cl, p, sec, esp] = st.eq.split('|'); s.clase = cl; s.setEquipo({ clase: cl, primaria: p, secundaria: sec, especial: esp || null }); }
+    if (st.ar && s.arma !== st.ar) s.setArma(st.ar);
     s.enVehiculo = st.vh || null;
     s.raiz.visible = !s.enVehiculo;
     if (st.d && !this.drones.has(st.d.id)) {
@@ -962,7 +1181,7 @@ export class Juego {
   enviarEstado() {
     const s = this.local;
     const r = (x) => Math.round(x * 100) / 100;
-    const st = { n: s.nombre, f: s.faccion, p: [r(s.pos.x), r(s.pos.y), r(s.pos.z)], y: r(s.yaw), pi: r(s.pitch), ag: s.quiereAgachar ? 1 : 0, vi: s.vivo ? 1 : 0, ar: s.arma === 'rpg' ? 1 : 0, hp: Math.round(s.vida), vh: this.vehLocal?.id || null };
+    const st = { n: s.nombre, f: s.faccion, p: [r(s.pos.x), r(s.pos.y), r(s.pos.z)], y: r(s.yaw), pi: r(s.pitch), ag: s.quiereAgachar ? 1 : 0, vi: s.vivo ? 1 : 0, ar: this.arma.actual, eq: [this.equipo.clase, this.equipo.primaria, this.equipo.secundaria, this.equipo.especial || ''].join('|'), hp: Math.round(s.vida), vh: this.vehLocal?.id || null };
     if (this.vehLocal) st.v = this.vehLocal.estadoRed();
     if (this.dronLocal) st.d = this.dronLocal.estadoRed();
     this.red.estado(st);
@@ -974,7 +1193,7 @@ export class Juego {
       case 'disp': {
         const o = new THREE.Vector3(...e.o), d = new THREE.Vector3(...e.d).normalize();
         this.lanzarProyectil(e.c, o, d, id, s?.faccion, false);
-        this.efectoDisparoRemoto(s, o, d, e.c.split(':')[0]);
+        this.efectoDisparoRemoto(s, o, d, e.c.split(':')[0], !!e.s);
         if (e.c.startsWith('canon')) this.efectos.fogonazoCanon(o, d, 1.4);
         break;
       }

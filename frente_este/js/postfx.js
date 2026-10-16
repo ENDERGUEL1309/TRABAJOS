@@ -107,6 +107,7 @@ export const PERFILES = {
   bodycam: { dist: 0.42, aberr: 1.0, vineta: 0.7, grano: 0.05, sat: 0.8, analogico: 0, termico: 0 },
   apuntando: { dist: 0.15, aberr: 0.6, vineta: 0.7, grano: 0.045, sat: 0.82, analogico: 0, termico: 0 },
   vehiculo3: { dist: 0.12, aberr: 0.4, vineta: 0.5, grano: 0.03, sat: 0.85, analogico: 0, termico: 0 },
+  visorFusil: { dist: 0.0, aberr: 0.5, vineta: 0.3, grano: 0.04, sat: 0.85, analogico: 0, termico: 0 },
   visor: { dist: 0.0, aberr: 0.2, vineta: 1.0, grano: 0.05, sat: 0.6, analogico: 0, termico: 0 },
   termico: { dist: 0.0, aberr: 0.2, vineta: 1.0, grano: 0.08, sat: 0.0, analogico: 0, termico: 1 },
   dron: { dist: 0.7, aberr: 1.4, vineta: 0.8, grano: 0.06, sat: 0.7, analogico: 1, termico: 0 },

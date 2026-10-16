@@ -68,16 +68,30 @@
       <div class="d-gasbarra"><div class="d-gas"></div></div>
     </div>
 
+    <div id="visorFusil" style="display:none">
+      <svg class="ret-pso" viewBox="-100 -100 200 200"><g stroke="#111" stroke-width="0.7" fill="#111">
+        <path d="M0 0 L-2.2 5 L2.2 5 Z"/><path d="M0 -10 L-2 -5 L2 -5 Z"/><path d="M0 -20 L-2 -15 L2 -15 Z"/>
+        <line x1="-60" y1="0" x2="-8" y2="0"/><line x1="8" y1="0" x2="20" y2="0"/>
+        <line x1="-50" y1="-2" x2="-50" y2="2"/><line x1="-40" y1="-2" x2="-40" y2="2"/><line x1="-30" y1="-2" x2="-30" y2="2"/><line x1="-20" y1="-2" x2="-20" y2="2"/>
+        <line x1="0" y1="8" x2="0" y2="60"/><path d="M-30 30 Q -22 18 -14 30" fill="none"/></g></svg>
+      <svg class="ret-mil" viewBox="-100 -100 200 200"><g stroke="#111" fill="#111">
+        <line x1="-100" y1="0" x2="-30" y2="0" stroke-width="2"/><line x1="30" y1="0" x2="100" y2="0" stroke-width="2"/><line x1="0" y1="30" x2="0" y2="100" stroke-width="2"/><line x1="0" y1="-100" x2="0" y2="-30" stroke-width="2"/>
+        <line x1="-30" y1="0" x2="30" y2="0" stroke-width="0.4"/><line x1="0" y1="-30" x2="0" y2="30" stroke-width="0.4"/>
+        <circle cx="-20" cy="0" r="1"/><circle cx="-10" cy="0" r="1"/><circle cx="10" cy="0" r="1"/><circle cx="20" cy="0" r="1"/>
+        <circle cx="0" cy="10" r="1"/><circle cx="0" cy="20" r="1"/><circle cx="0" cy="-10" r="1"/><circle cx="0" cy="-20" r="1"/></g></svg>
+    </div>
     <div id="pantallaMuerte"><h2>HAS CAÍDO</h2><p id="muerteTexto"></p><p id="muerteCuenta"></p></div>
     <div id="tabla"></div>
   </div>
 
   <div id="tactil"></div>
+  <div id="mapaGrande" style="display:none"><canvas id="lienzoMapa" width="1024" height="1024"></canvas><p>Mapa de operaciones · cuadrícula de 200 m · toca para cerrar</p></div>
+  <div id="despliegue" style="display:none"></div>
 
   <div id="menu">
     <div class="panel">
       <h1>FRENTE&nbsp;ESTE</h1>
-      <p class="sub">Shooter táctico realista · Beta 0.1 · 4 jugadores</p>
+      <p class="sub">Shooter táctico realista · Beta 0.2 · 4 jugadores</p>
       <div class="filas">
         <label>Nombre <input id="opNombre" maxlength="16" autocomplete="off"></label>
         <label>Modo
@@ -100,10 +114,12 @@
       <details>
         <summary>Controles</summary>
         <div class="ayuda">
-          <p><b>Infantería</b> — Móvil: joystick izquierdo moverse, arrastrar a la derecha mirar, MIRA a la izquierda, FUEGO a la derecha. Teclado: WASD, ratón, clic der. apuntar, clic izq. disparar, Mayús correr, C agacharse, Espacio saltar, R recargar, Q/1/2 arma, F subir a vehículo, G lanzar dron FPV, Tab marcador.</p>
+          <p><b>Infantería</b> — Móvil: joystick izquierdo moverse, arrastrar a la derecha mirar, MIRA a la izquierda, FUEGO a la derecha. Teclado: WASD, ratón, clic der. apuntar, clic izq. disparar, Mayús correr, C agacharse, Espacio saltar, R recargar, Q o 1/2/3 arma, E granada, F subir a vehículo, G lanzar dron FPV, M mapa, Tab marcador.</p>
           <p><b>Tanque / MT-LB (orugas)</b> — Móvil: palanca izquierda = oruga izquierda, palanca derecha = oruga derecha (las dos adelante: avanzar; una adelante y otra atrás: girar sobre sí mismo). Arrastrar en pantalla mueve la torreta, FUEGO dispara, ZOOM visor/térmico, 1ª/3ª cámara, MUNICIÓN cambia APFSDS/HE. Teclado: Q/Z oruga izq., E/C oruga der. (o W/S/A/D mezclado), ratón torreta, clic disparar, Espacio ametralladora coaxial, V cámara, clic derecho o N zoom/térmico, T munición, F bajar.</p>
           <p><b>Camioneta ZU-23-2 (ruedas)</b> — Móvil: joystick izquierdo acelerar/frenar, joystick derecho dirección; arrastrar en pantalla apunta el antiaéreo. Teclado: W/S, A/D, ratón y clic.</p>
-          <p><b>Dron FPV (modo 2)</b> — Stick izquierdo: gas (no vuelve al centro) y guiñada. Stick derecho: cabeceo y alabeo. ANGLE autonivela; ACRO es control por velocidad angular como un FPV real. Impacta a más de 15 km/h o pulsa DETONAR. Teclado: W/S gas, A/D guiñada, flechas o IJKL cabeceo/alabeo, B modo, Retroceso detonar, Esc volver. También admite mando (Gamepad).</p>
+          <p><b>Helicóptero Mi-24</b> — Stick izquierdo: subir/bajar (mantiene altura al soltar) y giro. Stick derecho: inclinarse para avanzar o desplazarse. FUEGO ametralladora, COHETES S-8. Teclado: W/S, A/D, flechas, clic izq./Espacio fuego, R o clic der. cohetes.</p>
+          <p><b>Avión Su-25</b> — Arranca en vuelo. Stick izquierdo: gas (no vuelve al centro) y timón. Stick derecho: cabeceo y alabeo. FUEGO cañón de 30 mm, COHETES, BOMBA (FAB-250). EYECTAR para saltar. Teclado: W/S gas, A/D timón, flechas, B bomba.</p>
+          <p><b>Dron FPV (modo 2)</b> — Stick izquierdo: gas (no vuelve al centro) y guiñada. Stick derecho: cabeceo y alabeo. Por defecto ESTABLE: mantiene la altura y el stick izquierdo sube y baja rápido. ANGLE autonivela con gas manual; ACRO es control por velocidad angular como un FPV real. Impacta a más de 15 km/h o pulsa DETONAR. Teclado: W/S gas, A/D guiñada, flechas o IJKL cabeceo/alabeo, B modo, Retroceso detonar, Esc volver. También admite mando (Gamepad).</p>
         </div>
       </details>
       <p class="nota">Ficción inspirada en la guerra ruso-ucraniana. Sin relación con unidades ni personas reales.</p>

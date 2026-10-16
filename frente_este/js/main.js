@@ -20,7 +20,7 @@ function cargarAjustes() {
     fov: a.fov || (tactil ? 72 : 75),
     sens: a.sens || 1,
     punto: a.punto ?? true,
-    modoDron: a.modoDron || 'ANGLE',
+    modoDron: 'ESTABLE',
   };
 }
 

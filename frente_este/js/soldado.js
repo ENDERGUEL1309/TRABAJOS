@@ -1,7 +1,8 @@
 // Soldado: modelo humanoide procedural, animación de marcha/agachado/muerte y cajas de impacto.
 import * as THREE from 'three';
 import * as TX from './texturas.js';
-import { crearFusil, crearRPG, material } from './modelos.js';
+import { material } from './modelos.js';
+import { crearModeloArma, equipoPorDefecto } from './arsenal.js';
 import { damp, dampAngle } from './util.js';
 
 export const FACCIONES = {
@@ -27,7 +28,8 @@ export class Soldado {
     this.quiereAgachar = false;
     this.vida = 100;
     this.vivo = true;
-    this.arma = 'fusil';
+    this.arma = 'primaria';
+    this.modelosArma = {};
     this.fase = 0;
     this.muerteT = 0;
     this.enVehiculo = null;
@@ -94,8 +96,6 @@ export class Soldado {
     this.pI = pierna(-1); this.pD = pierna(1);
     // Arma y brazos (giran con el cabeceo)
     const pivArma = new THREE.Group(); pivArma.position.set(0.05, 0.42, -0.05); torso.add(pivArma);
-    const fusil = crearFusil(FACCIONES[this.faccion].primaria); fusil.position.set(0.08, -0.04, -0.18); pivArma.add(fusil);
-    const rpg = crearRPG(true); rpg.position.set(0.14, 0.12, -0.05); rpg.visible = false; pivArma.add(rpg);
     const brazo = (lado, pos, rot) => {
       const g = new THREE.Group(); g.position.set(lado * 0.2, 0.15, 0.0); pivArma.add(g);
       const a = sh(new THREE.Mesh(geo('brazo', () => new THREE.CapsuleGeometry(0.055, 0.42, 3, 8)), camo));
@@ -108,7 +108,8 @@ export class Soldado {
     banda.position.y = 0.12; bi.add(banda);
     raiz.traverse((o) => { if (o.isMesh) o.userData.soldado = this; });
 
-    Object.assign(this, { raiz, cadera, torso, cuello, pivArma, fusil, rpg });
+    Object.assign(this, { raiz, cadera, torso, cuello, pivArma });
+    this.setEquipo(equipoPorDefecto('asalto', this.faccion));
     // Marcadores de cajas de impacto
     this.marcas = [cabeza, pecho, pelvis, this.pI.muslo.children[0], this.pD.muslo.children[0], this.pI.rod.children[0], this.pD.rod.children[0]];
     this.offsets = [new THREE.Vector3(0, 0.02, 0), new THREE.Vector3(0, 0.38, 0), new THREE.Vector3(0, 0.02, 0),
@@ -130,11 +131,33 @@ export class Soldado {
     this.etiqueta = s;
   }
 
-  setArma(a) {
-    this.arma = a;
-    this.fusil.visible = a === 'fusil';
-    this.rpg.visible = a === 'rpg';
+  // Modelos de tercera persona del equipo (principal, pistola, lanzador)
+  setEquipo(eq) {
+    this.equipo = eq;
+    for (const m of Object.values(this.modelosArma)) this.pivArma.remove(m);
+    this.modelosArma = {};
+    const poner = (clave, id, acc, pos) => {
+      if (!id) return;
+      const m = crearModeloArma(id, acc || undefined);
+      m.position.copy(pos);
+      m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.userData.soldado = this; } });
+      m.visible = false;
+      this.pivArma.add(m);
+      this.modelosArma[clave] = m;
+    };
+    poner('primaria', eq.primaria, eq.accPrimaria, new THREE.Vector3(0.08, -0.04, -0.18));
+    poner('secundaria', eq.secundaria, eq.accSecundaria, new THREE.Vector3(0.02, 0.02, -0.34));
+    poner('especial', eq.especial, null, new THREE.Vector3(0.14, 0.12, -0.05));
+    this.setArma('primaria');
   }
+
+  setArma(a) {
+    if (!this.modelosArma[a]) a = 'primaria';
+    this.arma = a;
+    for (const [k, m] of Object.entries(this.modelosArma)) m.visible = k === a;
+  }
+
+  idArma() { return this.equipo[this.arma] || this.equipo.primaria; }
 
   matar() {
     this.vivo = false;

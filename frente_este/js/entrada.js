@@ -46,18 +46,22 @@ class Joystick {
 const BOTONES = [
   // id, etiqueta, modos, tipo (mantener|pulsar)
   ['apuntar', 'MIRA', 'infanteria', 'mantener'],
-  ['disparar', 'FUEGO', 'infanteria,oruga,ruedas', 'mantener'],
+  ['disparar', 'FUEGO', 'infanteria,oruga,ruedas,heli,avion', 'mantener'],
   ['recargar', 'RECARGA', 'infanteria', 'pulsar'],
   ['saltar', 'SALTO', 'infanteria', 'pulsar'],
   ['agachar', 'AGACHAR', 'infanteria', 'pulsar'],
   ['cambiarArma', 'ARMA', 'infanteria', 'pulsar'],
-  ['interactuar', 'SUBIR', 'infanteria,oruga,ruedas', 'pulsar'],
+  ['interactuar', 'SUBIR', 'infanteria,oruga,ruedas,heli,avion', 'pulsar'],
+  ['granada', 'GRANADA', 'infanteria', 'pulsar'],
+  ['mapa', 'MAPA', 'infanteria,oruga,ruedas,heli,avion', 'pulsar'],
+  ['cohetes', 'COHETES', 'heli,avion', 'mantener'],
+  ['bomba', 'BOMBA', 'avion', 'pulsar'],
   ['dron', 'DRON FPV', 'infanteria', 'pulsar'],
-  ['camara', '1ª / 3ª', 'oruga,ruedas', 'pulsar'],
+  ['camara', '1ª / 3ª', 'oruga,ruedas,heli,avion', 'pulsar'],
   ['zoom', 'ZOOM', 'oruga,ruedas', 'pulsar'],
   ['municion', 'MUNICIÓN', 'oruga', 'pulsar'],
   ['detonar', 'DETONAR', 'dron', 'pulsar'],
-  ['modoVuelo', 'ANGLE', 'dron', 'pulsar'],
+  ['modoVuelo', 'ESTABLE', 'dron', 'pulsar'],
   ['salirDron', 'VOLVER', 'dron', 'pulsar'],
   ['ametralladora', 'AMETR.', 'oruga', 'mantener'],
 ];
@@ -127,8 +131,8 @@ export class Entrada {
       orugaD: new Joystick(c, 'palancaD', { ejeX: false, modos: 'oruga', etiqueta: 'ORUGA DER' }),
       acel: new Joystick(c, 'joyAcel', { ejeX: false, modos: 'ruedas', etiqueta: 'ACELERAR / FRENAR' }),
       dir: new Joystick(c, 'joyDir', { ejeY: false, modos: 'ruedas', etiqueta: 'DIRECCIÓN' }),
-      dronI: new Joystick(c, 'joyDronI', { centrarY: false, modos: 'dron', etiqueta: 'GAS · GUIÑADA' }),
-      dronD: new Joystick(c, 'joyDronD', { modos: 'dron', etiqueta: 'CABECEO · ALABEO' }),
+      dronI: new Joystick(c, 'joyDronI', { centrarY: false, modos: 'dron,heli,avion', etiqueta: 'SUBIR/BAJAR · GIRO' }),
+      dronD: new Joystick(c, 'joyDronD', { modos: 'dron,heli,avion', etiqueta: 'CABECEO · ALABEO' }),
     };
     // Acelerador del dron empieza abajo
     this.joys.dronI.y = -1; this.joys.dronI.pintar();
@@ -165,12 +169,13 @@ export class Entrada {
 
   flancosTecla(code) {
     const m = {
-      KeyR: 'recargar', Space: 'saltar', KeyC: 'agachar', KeyX: 'agachar', Digit1: 'arma1', Digit2: 'arma2', KeyF: 'interactuar',
+      KeyR: 'recargar', Space: 'saltar', KeyC: 'agachar', KeyX: 'agachar', Digit1: 'arma1', Digit2: 'arma2', Digit3: 'arma3', KeyF: 'interactuar', KeyE: 'granada', KeyM: 'mapa',
       KeyG: 'dron', KeyV: 'camara', KeyN: 'zoom', KeyT: 'municion', Backspace: 'detonar', KeyB: 'modoVuelo',
       Escape: 'salirDron', Tab: 'marcador', KeyH: 'ayuda', KeyQ: 'cambiarArma',
     };
     if (m[code]) this.flancos.add(m[code]);
     if (this.modo === 'dron' && code === 'KeyF') this.flancos.add('detonar');
+    if (this.modo === 'avion' && code === 'KeyB') { this.flancos.delete('modoVuelo'); this.flancos.add('bomba'); }
   }
 
   setModo(modo) {
@@ -180,7 +185,19 @@ export class Entrada {
     for (const el of this.cont.querySelectorAll('[data-modos]')) el.style.display = el.dataset.modos.split(',').includes(modo) ? '' : 'none';
     for (const j of Object.values(this.joys)) { if (j !== this.joys.dronI) j.reset(); }
     this.mantenidos = {};
-    if (modo === 'dron') { this.joys.dronI.x = 0; this.joys.dronI.y = -1; this.joys.dronI.pintar(); this.acelDron = 0; }
+    const etq = this.joys.dronI.el.querySelector('.joy-etq');
+    if (modo === 'heli') { this.joys.dronI.centrarY = true; this.joys.dronI.reset(); etq.textContent = 'SUBIR/BAJAR · GIRO'; }
+    if (modo === 'avion') { this.joys.dronI.centrarY = false; this.joys.dronI.x = 0; this.joys.dronI.y = 0.4; this.joys.dronI.pintar(); this.acelDron = 0.7; etq.textContent = 'GAS · TIMÓN'; }
+  }
+
+  // ESTABLE: el stick izquierdo vuelve al centro y controla la velocidad de subida (mantiene altura).
+  // ANGLE/ACRO: gas manual que no vuelve al centro, empezando en vuelo estacionario.
+  configurarDron(modo) {
+    const j = this.joys.dronI;
+    j.centrarY = modo === 'ESTABLE';
+    j.x = 0; j.y = 0; j.pintar();
+    this.acelDron = 0.5;
+    j.el.querySelector('.joy-etq').textContent = modo === 'ESTABLE' ? 'SUBIR/BAJAR · GIRO' : 'GAS · GUIÑADA';
   }
 
   setEtiqueta(id, texto, visible = true) {
@@ -217,11 +234,13 @@ export class Entrada {
     } else if (this.modo === 'ruedas') {
       e.acel = clamp(J.acel.y + k('KeyW') - k('KeyS'), -1, 1);
       e.dir = clamp(J.dir.x + k('KeyD') - k('KeyA'), -1, 1);
-    } else if (this.modo === 'dron') {
-      // Modo 2: izquierda gas/guiñada, derecha cabeceo/alabeo
+    } else if (this.modo === 'dron' || this.modo === 'heli' || this.modo === 'avion') {
+      // Modo 2: izquierda gas (o subir/bajar) y guiñada, derecha cabeceo/alabeo
       this.acelDron = clamp(this.acelDron + (k('KeyW') - k('KeyS')) * dt * 0.9, 0, 1);
-      if (this.tactil) this.acelDron = (J.dronI.y + 1) / 2;
+      if (this.tactil && !J.dronI.centrarY) this.acelDron = (J.dronI.y + 1) / 2;
       e.dAcel = this.acelDron;
+      e.dSubir = clamp(J.dronI.y + k('KeyW') - k('KeyS'), -1, 1);
+      e.cohetes = !!M.cohetes || T.has('KeyR') || (this.raton.der && this.modo !== 'dron');
       e.dGuinada = clamp(J.dronI.x + k('KeyD') - k('KeyA'), -1, 1);
       e.dCabeceo = clamp(J.dronD.y + k('ArrowUp') + k('KeyI') - k('ArrowDown') - k('KeyK'), -1, 1);
       e.dAlabeo = clamp(J.dronD.x + k('ArrowRight') + k('KeyL') - k('ArrowLeft') - k('KeyJ'), -1, 1);
@@ -248,8 +267,9 @@ export class Entrada {
       e.orugaI = clamp(e.orugaI - ax[1], -1, 1); e.orugaD = clamp(e.orugaD - ax[3], -1, 1);
     } else if (this.modo === 'ruedas') {
       e.acel = clamp(e.acel - ax[1], -1, 1); e.dir = clamp(e.dir + ax[2], -1, 1);
-    } else if (this.modo === 'dron') {
+    } else if (this.modo === 'dron' || this.modo === 'heli' || this.modo === 'avion') {
       e.dAcel = clamp((-ax[1] + 1) / 2, 0, 1);
+      e.dSubir = -ax[1];
       e.dGuinada = ax[0]; e.dCabeceo = -ax[3]; e.dAlabeo = ax[2];
     }
     if (this.modo !== 'dron' && this.modo !== 'infanteria' && this.modo !== 'oruga') {

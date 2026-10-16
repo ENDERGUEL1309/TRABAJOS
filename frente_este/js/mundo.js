@@ -1092,7 +1092,8 @@ export class Mundo {
         { tipo: 'mtlb', x: bx - lado * 14, z: -50 },
         { tipo: 'tecnica', x: bx - lado * 20, z: carreteraZ(bx - lado * 20) + 5 },
       ];
-      this.bases[fac] = { spawns, vehiculos, x: bx, yaw: lado < 0 ? -Math.PI / 2 : Math.PI / 2 };
+      const aeronaves = [{ tipo: 'heli', x: bx + lado * 38, z: -75 }, { tipo: 'avion', x: bx + lado * 40, z: 95 }];
+      this.bases[fac] = { spawns, vehiculos, aeronaves, x: bx, yaw: lado < 0 ? -Math.PI / 2 : Math.PI / 2 };
       // Muro de sacos en U frente a la base
       for (let z = -40; z <= 40; z += 0.75) {
         if (Math.abs(z) < 5) continue;
