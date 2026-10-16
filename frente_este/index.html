@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#14160f">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Frente Este · Beta</title>
+  <link rel="stylesheet" href="css/estilo.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/three.module.min.js",
+      "three/addons/": "./vendor/three/addons/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="lienzo"></canvas>
+
+  <div id="hud">
+    <div id="bodycam"><span class="rec">● REC</span> <span id="bcTiempo"></span><br><span id="bcId"></span></div>
+    <canvas id="brujula" width="420" height="42"></canvas>
+    <div id="marcador"></div>
+    <canvas id="minimapa" width="180" height="180"></canvas>
+    <div id="red"></div>
+    <div id="feed"></div>
+    <div id="mensaje"></div>
+    <div id="punto"></div>
+    <div id="marcaImpacto"><i></i><i></i><i></i><i></i></div>
+    <div id="indDano"></div>
+    <div id="aviso"></div>
+    <div id="infoArma"><b id="armaNombre"></b><span id="armaMun"></span></div>
+    <div id="vida"><div id="vidaBarra"></div></div>
+
+    <div id="hudVeh">
+      <svg width="80" height="80" viewBox="0 0 80 80" class="indic">
+        <g id="vehIndic"><rect x="27" y="18" width="26" height="46" rx="2" fill="none" stroke="#d8d6c8" stroke-width="2"/><path d="M33 22 L40 16 L47 22" fill="none" stroke="#d8d6c8" stroke-width="2"/></g>
+        <g id="vehTorreta"><circle cx="40" cy="40" r="9" fill="none" stroke="#f2c94c" stroke-width="2"/><line x1="40" y1="40" x2="40" y2="6" stroke="#f2c94c" stroke-width="3"/></g>
+      </svg>
+      <div class="datos"><b id="vehNombre"></b><span id="vehVel"></span><span id="vehVida"></span><span id="vehMun"></span><div class="carga"><div id="vehRecarga"></div></div></div>
+    </div>
+    <svg id="reticulaVisor" viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet">
+      <g stroke="#e9f0e0" stroke-width="0.6" fill="none">
+        <line x1="-60" y1="0" x2="-6" y2="0"/><line x1="6" y1="0" x2="60" y2="0"/>
+        <line x1="0" y1="6" x2="0" y2="40"/>
+        <path d="M -5 4 L 0 0 L 5 4"/>
+        <g font-size="4" fill="#e9f0e0" stroke="none" font-family="monospace">
+          <text x="-3" y="15">4</text><text x="-3" y="25">8</text><text x="-4" y="35">12</text>
+        </g>
+        <line x1="-3" y1="12" x2="3" y2="12"/><line x1="-3" y1="22" x2="3" y2="22"/><line x1="-3" y1="32" x2="3" y2="32"/>
+        <line x1="-20" y1="-2" x2="-20" y2="2"/><line x1="-40" y1="-2" x2="-40" y2="2"/><line x1="20" y1="-2" x2="20" y2="2"/><line x1="40" y1="-2" x2="40" y2="2"/>
+      </g>
+    </svg>
+    <div id="mira3"></div>
+    <div id="miraDeseo"></div>
+
+    <div id="osdDron">
+      <div class="d-cruz">+</div>
+      <div class="d-horizonte"></div>
+      <div class="d-volt"></div><div class="d-lq"></div>
+      <div class="d-modo"></div><div class="d-rumbo"></div>
+      <div class="d-alt"></div><div class="d-vel"></div>
+      <div class="d-dist"></div><div class="d-tiempo"></div>
+      <div class="d-gasbarra"><div class="d-gas"></div></div>
+    </div>
+
+    <div id="pantallaMuerte"><h2>HAS CAÍDO</h2><p id="muerteTexto"></p><p id="muerteCuenta"></p></div>
+    <div id="tabla"></div>
+  </div>
+
+  <div id="tactil"></div>
+
+  <div id="menu">
+    <div class="panel">
+      <h1>FRENTE&nbsp;ESTE</h1>
+      <p class="sub">Shooter táctico realista · Beta 0.1 · 4 jugadores</p>
+      <div class="filas">
+        <label>Nombre <input id="opNombre" maxlength="16" autocomplete="off"></label>
+        <label>Modo
+          <select id="opModo"><option value="local">Partida local (con IA)</option><option value="red">Multijugador beta (servidor)</option></select>
+        </label>
+        <label class="soloRed">Servidor <input id="opUrl" placeholder="ws://192.168.1.10:8080/ws"></label>
+        <label class="soloRed">Sala <input id="opSala" value="beta" maxlength="32"></label>
+        <label>Bando
+          <select id="opFaccion"><option value="auto">Automático</option><option value="UA">Ucrania</option><option value="RU">Rusia</option></select>
+        </label>
+        <label>Calidad
+          <select id="opCalidad"><option value="baja">Baja</option><option value="media">Media</option><option value="alta">Alta</option></select>
+        </label>
+        <label>Campo de visión <input id="opFov" type="range" min="60" max="90" step="1"><span id="opFovV"></span></label>
+        <label>Sensibilidad <input id="opSens" type="range" min="0.3" max="3" step="0.1"><span id="opSensV"></span></label>
+        <label class="check"><input id="opPunto" type="checkbox"> Punto central al disparar desde la cadera</label>
+      </div>
+      <button id="btnJugar">JUGAR</button>
+      <p id="estadoCarga"></p>
+      <details>
+        <summary>Controles</summary>
+        <div class="ayuda">
+          <p><b>Infantería</b> — Móvil: joystick izquierdo moverse, arrastrar a la derecha mirar, MIRA a la izquierda, FUEGO a la derecha. Teclado: WASD, ratón, clic der. apuntar, clic izq. disparar, Mayús correr, C agacharse, Espacio saltar, R recargar, Q/1/2 arma, F subir a vehículo, G lanzar dron FPV, Tab marcador.</p>
+          <p><b>Tanque / MT-LB (orugas)</b> — Móvil: palanca izquierda = oruga izquierda, palanca derecha = oruga derecha (las dos adelante: avanzar; una adelante y otra atrás: girar sobre sí mismo). Arrastrar en pantalla mueve la torreta, FUEGO dispara, ZOOM visor/térmico, 1ª/3ª cámara, MUNICIÓN cambia APFSDS/HE. Teclado: Q/Z oruga izq., E/C oruga der. (o W/S/A/D mezclado), ratón torreta, clic disparar, Espacio ametralladora coaxial, V cámara, clic derecho o N zoom/térmico, T munición, F bajar.</p>
+          <p><b>Camioneta ZU-23-2 (ruedas)</b> — Móvil: joystick izquierdo acelerar/frenar, joystick derecho dirección; arrastrar en pantalla apunta el antiaéreo. Teclado: W/S, A/D, ratón y clic.</p>
+          <p><b>Dron FPV (modo 2)</b> — Stick izquierdo: gas (no vuelve al centro) y guiñada. Stick derecho: cabeceo y alabeo. ANGLE autonivela; ACRO es control por velocidad angular como un FPV real. Impacta a más de 15 km/h o pulsa DETONAR. Teclado: W/S gas, A/D guiñada, flechas o IJKL cabeceo/alabeo, B modo, Retroceso detonar, Esc volver. También admite mando (Gamepad).</p>
+        </div>
+      </details>
+      <p class="nota">Ficción inspirada en la guerra ruso-ucraniana. Sin relación con unidades ni personas reales.</p>
+    </div>
+  </div>
+
+  <div id="girar"><div>↻</div><p>Gira el teléfono en horizontal</p></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
