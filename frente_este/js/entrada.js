@@ -82,7 +82,8 @@ export class Entrada {
 
     // --- Teclado ---
     addEventListener('keydown', (e) => {
-      if (e.target.tagName === 'INPUT') return;
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      if (this.tactil && this.modo !== 'menu' && !this.ajustes.forzarTactil) this.setTactil(false); // se usa teclado: modo PC
       if (!this.teclas.has(e.code)) this.flancosTecla(e.code);
       this.teclas.add(e.code);
       if (['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
@@ -92,7 +93,8 @@ export class Entrada {
 
     // --- Ratón ---
     lienzo.addEventListener('mousedown', (e) => {
-      if (this.tactil || this.modo === 'menu') return;
+      if (this.modo === 'menu') return;
+      if (this.tactil && !this.ajustes.forzarTactil) this.setTactil(false);
       if (document.pointerLockElement !== lienzo) { lienzo.requestPointerLock?.(); return; }
       if (e.button === 0) this.raton.izq = true;
       if (e.button === 2) this.raton.der = true;
@@ -102,6 +104,13 @@ export class Entrada {
       if (document.pointerLockElement === lienzo) { this.raton.dx += e.movementX; this.raton.dy += e.movementY; }
     });
     lienzo.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Cambio automático: un dedo activa los controles táctiles; el ratón o el teclado los quitan
+    addEventListener('pointerdown', (e) => {
+      if (this.modo === 'menu') return;
+      if (e.pointerType === 'touch' && !this.tactil && !this.ajustes.forzarPC) this.setTactil(true);
+      else if (e.pointerType === 'mouse' && this.tactil && !this.ajustes.forzarTactil) { this.setTactil(false); lienzo.requestPointerLock?.(); }
+    }, true);
 
     // --- Controles táctiles ---
     this.construirTactil();
@@ -176,6 +185,14 @@ export class Entrada {
     if (m[code]) this.flancos.add(m[code]);
     if (this.modo === 'dron' && code === 'KeyF') this.flancos.add('detonar');
     if (this.modo === 'avion' && code === 'KeyB') { this.flancos.delete('modoVuelo'); this.flancos.add('bomba'); }
+  }
+
+  setTactil(v) {
+    if (this.tactil === v) return;
+    this.tactil = v;
+    this.ajustes.tactil = v;
+    document.body.classList.toggle('tactil', v);
+    this.setModo(this.modo);
   }
 
   setModo(modo) {

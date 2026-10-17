@@ -4,7 +4,8 @@ import { Audio } from './audio.js';
 import { isTouchDevice } from './util.js';
 
 const $ = (id) => document.getElementById(id);
-const tactil = isTouchDevice();
+const tactilDetectado = isTouchDevice();
+let tactil = tactilDetectado;
 
 function cargarAjustes() {
   let a = {};
@@ -20,6 +21,7 @@ function cargarAjustes() {
     fov: a.fov || (tactil ? 72 : 75),
     sens: a.sens || 1,
     punto: a.punto ?? true,
+    controles: a.controles || 'auto',
     modoDron: 'ESTABLE',
   };
 }
@@ -34,6 +36,7 @@ $('opCalidad').value = aj.calidad;
 $('opFov').value = aj.fov;
 $('opSens').value = aj.sens;
 $('opPunto').checked = aj.punto;
+$('opControles').value = aj.controles;
 const refrescar = () => {
   $('opFovV').textContent = $('opFov').value + '°';
   $('opSensV').textContent = Number($('opSens').value).toFixed(1);
@@ -54,8 +57,9 @@ $('btnJugar').addEventListener('click', async () => {
   if (juego) return;
   Object.assign(aj, {
     nombre: $('opNombre').value.trim() || 'Soldado', modo: $('opModo').value, url: $('opUrl').value.trim(), sala: $('opSala').value.trim() || 'beta',
-    faccion: $('opFaccion').value, calidad: $('opCalidad').value, fov: Number($('opFov').value), sens: Number($('opSens').value), punto: $('opPunto').checked,
+    faccion: $('opFaccion').value, calidad: $('opCalidad').value, fov: Number($('opFov').value), sens: Number($('opSens').value), punto: $('opPunto').checked, controles: $('opControles').value,
   });
+  tactil = aj.controles === 'tactil' ? true : aj.controles === 'pc' ? false : tactilDetectado;
   try { localStorage.setItem('frenteEste.ajustes', JSON.stringify(aj)); } catch { /* ignorar */ }
   const audio = new Audio();
   audio.iniciar(); // requiere gesto del usuario
@@ -66,6 +70,7 @@ $('btnJugar').addEventListener('click', async () => {
   $('btnJugar').disabled = true;
   const ajustes = {
     fov: aj.fov, sensRaton: aj.sens, sensTactil: aj.sens * 1.7, punto: aj.punto, tactil, modoDron: aj.modoDron,
+    forzarTactil: aj.controles === 'tactil', forzarPC: aj.controles === 'pc',
   };
   let url = aj.url;
   if (aj.modo === 'red') {

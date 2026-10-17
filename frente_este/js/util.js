@@ -141,6 +141,10 @@ export function pushCircleAABB(p, r, box) {
 export function vec(x = 0, y = 0, z = 0) { return new THREE.Vector3(x, y, z); }
 export { _v as tmpVec };
 
+// Solo se considera táctil si el puntero principal es un dedo (móvil/tableta).
+// Un portátil con pantalla táctil y ratón se trata como PC.
 export function isTouchDevice() {
-  return ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  const mm = (q) => window.matchMedia && window.matchMedia(q).matches;
+  if (mm('(any-pointer: fine)') && !mm('(pointer: coarse)')) return false;
+  return mm('(pointer: coarse)') || (('ontouchstart' in window) && !mm('(any-pointer: fine)'));
 }
