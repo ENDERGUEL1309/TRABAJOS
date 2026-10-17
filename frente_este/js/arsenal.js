@@ -163,6 +163,14 @@ export function crearModeloArma(id, acc = accesoriosPorDefecto(id)) {
     bocaZ = A.boca.z; bocaY = A.boca.y;
     rielY = A.riel.y; rielZ = A.riel.z;
     manoIzq = new THREE.Vector3(-0.025, A.manoIzq.y, A.manoIzq.z);
+    // El AK no tiene riel superior: las ópticas van en un montaje lateral elevado sobre la tapa
+    if (conPerfil.perfil === 'ak' && acc.mira !== 'hierro') {
+      const base = rielY;
+      rielY += 0.026;
+      p.push([caja(0.01, 0.05, 0.11, -0.03, base - 0.006, rielZ + 0.01), 'pavonado']);
+      p.push([caja(0.042, 0.008, 0.1, -0.008, rielY - 0.004, rielZ + 0.01), 'pavonado']);
+      p.push([caja(0.01, 0.026, 0.1, -0.026, rielY - 0.017, rielZ + 0.01), 'pavonado']);
+    }
   } else if (f === 'ak' || f === 'ar' || f === 'bren' || f === 'pkm' || f === 'svd' || f === 'cerrojo' || f === 'm82') {
     const L = M.canon;
     const recL = f === 'pkm' || f === 'm82' ? 0.38 : 0.3;
@@ -247,7 +255,8 @@ export function crearModeloArma(id, acc = accesoriosPorDefecto(id)) {
     // El perfil ya trae miras metálicas (AK, pistola); el M4 de cajón plano necesita alza
     const al = perfil.anclas.alza;
     if (conPerfil.perfil === 'm4') G.add(grupo([[caja(0.026, 0.03, 0.03, 0, rielY + 0.012, rielZ + 0.01), 'pavonado']]));
-    miraY = conPerfil.perfil === 'm4' ? rielY + 0.022 : al.y + 0.004; miraZ = al.z;
+    // Línea de mira: el ojo pasa por encima del alza, alineado con el punto de mira delantero
+    miraY = conPerfil.perfil === 'm4' ? rielY + 0.034 : conPerfil.perfil === 'ak' ? al.y + 0.017 : al.y + 0.004; miraZ = al.z;
   } else if (tipoMira === 'hierro') {
     const alza = grupo([[caja(0.03, 0.02, 0.012, 0, rielY + 0.005, -0.02), 'pavonado']]);
     G.add(alza);
@@ -261,7 +270,7 @@ export function crearModeloArma(id, acc = accesoriosPorDefecto(id)) {
       const hueco = new THREE.Path(); hueco.moveTo(-0.019, 0.004); hueco.lineTo(0.019, 0.004); hueco.lineTo(0.019, 0.024); hueco.quadraticCurveTo(0.019, 0.031, 0.012, 0.031); hueco.lineTo(-0.012, 0.031); hueco.quadraticCurveTo(-0.019, 0.031, -0.019, 0.024); hueco.lineTo(-0.019, 0.004);
       sh.holes.push(hueco);
       const ventana = new THREE.ExtrudeGeometry(sh, { depth: 0.012, bevelEnabled: true, bevelThickness: 0.0015, bevelSize: 0.001, bevelSegments: 2 }).translate(0, rielY + 0.012, rielZ - 0.03);
-      G.add(grupo([[caja(0.03, 0.012, 0.085, 0, rielY + 0.004, rielZ), 'pavonado'], [ventana, 'pavonado'], [caja(0.03, 0.022, 0.04, 0, rielY + 0.02, rielZ + 0.028), 'pavonado'],
+      G.add(grupo([[caja(0.03, 0.012, 0.085, 0, rielY + 0.004, rielZ), 'pavonado'], [ventana, 'pavonado'], [caja(0.03, 0.009, 0.035, 0, rielY + 0.0105, rielZ + 0.03), 'pavonado'],
         [new THREE.CylinderGeometry(0.011, 0.011, 0.012, 14).rotateZ(Math.PI / 2).translate(0.019, rielY + 0.022, rielZ), 'polimero']]));
       const cristal = new THREE.Mesh(new THREE.PlaneGeometry(0.038, 0.026), new THREE.MeshStandardMaterial({ color: '#c8e0ff', transparent: true, opacity: 0.12, metalness: 0.9, roughness: 0.05, depthWrite: false }));
       cristal.position.set(0, rielY + 0.03, rielZ - 0.024); G.add(cristal);
