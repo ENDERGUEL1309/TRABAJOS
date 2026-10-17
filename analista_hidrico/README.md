@@ -13,6 +13,7 @@ analista_hidrico/
 │   └── generar_datos.py           # generador reproducible, con las relaciones "verdaderas"
 ├── src/
 │   ├── main.py                    # CLI interactiva (rich)
+│   ├── app_web.py                 # interfaz web (Streamlit)
 │   ├── agent.py                   # diálogo con la API de Anthropic y bucle de herramientas
 │   ├── ingestion.py               # lectura CSV/Excel/URL, detección de fechas y de tipos de variable
 │   ├── sandbox_runner.py          # ejecución controlada; recoge gráficos, tablas y resultados
@@ -21,6 +22,7 @@ analista_hidrico/
 ├── casos_validacion/
 │   ├── caso_00_planta_sintetica.json
 │   └── plantilla_caso.json
+├── Dockerfile, railway.json       # despliegue en Railway
 └── output/                        # gráficos (.png), tablas (.csv), conclusiones (.md)
 ```
 
@@ -121,6 +123,58 @@ Recomendaciones para que la medición sea justa:
 - Las métricas (R², RMSE) solo son comparables si el esquema de validación es parecido; si el
   documento usó, p. ej., validación cruzada aleatoria, pídalo en la `pregunta`.
 - Guarde los resultados de cada versión del agente para comparar mejoras en el tiempo.
+
+## Versión web (Streamlit)
+
+```bash
+pip install -r requirements.txt
+export ANTHROPIC_API_KEY=sk-ant-...
+export APP_PASSWORD=una-clave-larga      # o PERMITIR_SIN_CLAVE=1 solo en su PC
+streamlit run src/app_web.py             # abre http://localhost:8501
+```
+
+La web tiene tres pestañas: **Análisis** (chat con el agente; cada script y sus gráficos aparecen en
+la conversación), **Datos** (perfil del dataset) y **Resultados** (conclusión, galería de gráficos,
+tablas y un ZIP con todo). A diferencia de la CLI, los scripts se ejecutan sin pedir confirmación; el
+código de cada uno queda visible en un desplegable.
+
+Cada pestaña del navegador es una sesión independiente con su carpeta en `output/sesiones/`, que se
+borra pasadas 24 h.
+
+## Desplegar en Railway
+
+El proyecto incluye `Dockerfile`, `railway.json` y `.streamlit/config.toml`.
+
+1. Suba el repositorio a GitHub (ya está en `enderguel1309/trabajos`).
+2. En [railway.com](https://railway.com): **New Project → Deploy from GitHub repo** → elija el
+   repositorio y la rama.
+3. En el servicio, **Settings**:
+   - **Source → Root Directory**: `/analista_hidrico`
+   - **Config-as-code → Railway Config File**: `/analista_hidrico/railway.json`
+     (Railway no busca este archivo dentro del Root Directory: hay que dar la ruta completa).
+4. En **Variables** agregue:
+
+   | Variable | Valor | Obligatoria |
+   |---|---|---|
+   | `ANTHROPIC_API_KEY` | su clave `sk-ant-...` | sí |
+   | `APP_PASSWORD` | contraseña larga para entrar a la web | sí |
+   | `MAX_MENSAJES_POR_SESION` | p. ej. `40` (limita el gasto por sesión) | no |
+   | `AGENTE_ESFUERZO` | `medium` para abaratar, `high` por defecto | no |
+   | `SANDBOX_MEMORIA_MB` | `3072` por defecto; súbalo si el plan tiene más RAM | no |
+
+5. **Settings → Networking → Generate Domain** para obtener la URL pública
+   (`https://<nombre>.up.railway.app`).
+6. Cada `git push` a esa rama vuelve a desplegar.
+
+Recomendaciones:
+- Plan con al menos 2 GB de RAM: SARIMAX y random forest consumen memoria.
+- Sin volumen, las sesiones se pierden al redeplegar: el usuario debe descargar el ZIP. Para
+  conservarlas, añada un **Volume** montado en `/app/output`.
+- En **Usage** de Railway y en la consola de Anthropic configure límites de gasto.
+- Todos los usuarios comparten una contraseña y, en el servidor, un mismo contenedor. El sandbox
+  impide que los scripts lean la clave de API, usen la red o escriban fuera de su carpeta, pero no
+  impide que lean archivos subidos en otras sesiones. Comparta la contraseña solo con personas de
+  confianza; para usuarios externos se necesitaría login individual y ejecución en contenedores separados.
 
 ## Regenerar los datos de ejemplo
 

@@ -56,6 +56,12 @@ PRELUDIO = textwrap.dedent('''
                               "os.rename", "os.rmdir", "os.chmod", "webbrowser.")):
             raise PermissionError(f"Operación bloqueada por el sandbox: {{evento}}")
         if evento == "open" and args and isinstance(args[0], (str, bytes, os.PathLike)):
+            ruta_leida = os.fsdecode(args[0])
+            # Otros procesos (p. ej. el servidor web con la API key) y variables de entorno.
+            if ruta_leida.startswith("/proc/") and (
+                    "environ" in ruta_leida or ruta_leida.split("/")[2] not in ("self", "cpuinfo",
+                    "meminfo", "stat", "loadavg")):
+                raise PermissionError(f"Lectura bloqueada por el sandbox: {{ruta_leida}}")
             modo = args[1] if len(args) > 1 and isinstance(args[1], str) else "r"
             if any(m in modo for m in "wax+"):
                 ruta = os.path.realpath(os.fsdecode(args[0]))

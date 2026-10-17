@@ -1,0 +1,13 @@
+[server]
+headless = true
+maxUploadSize = 50
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "viewer"
+
+[theme]
+primaryColor = "#2a78d6"

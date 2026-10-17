@@ -8,5 +8,6 @@ matplotlib>=3.8
 seaborn>=0.13
 anthropic>=1.15.0
 rich>=13.7
+streamlit>=1.40
 # Opcional, para pronosticar(metodo="prophet"):
 # prophet>=1.1
