@@ -34,6 +34,13 @@ El servidor no necesita `npm install`: no tiene dependencias externas.
 
 También funciona con mando (Gamepad API).
 
+## Mapas
+
+- **Villa Atómica** (por defecto, arena pequeña de ~100 × 74 m para infantería): pueblo de pruebas nucleares de los años 50 en el desierto, inspirado en los clásicos mapas de "pueblo de pruebas". Tiene dos casas de dos plantas enfrentadas, con escalera, habitaciones, garaje con techo transitable y ventanas para disparar; calle con rotonda y autobús escolar; coches y camiones como cobertura; vallas bajas que se pueden saltar; patios traseros con cobertizos; y maniquíes. Cada equipo aparece en un extremo de la calle.
+- **Frente Este** (2,4 km, con vehículos y aeronaves).
+
+El mapa se elige en el menú. En multijugador, cada mapa usa su propia sala.
+
 ## Novedades (beta 0.2)
 
 - **Daño corregido en iPhone**: el lienzo 3D medía `100vh`, que en Safari es más alto que la zona visible, así que el punto de mira no coincidía con el centro real de la imagen y los disparos salían por encima. Ahora el lienzo se ajusta al área visible. Además se ha reducido la dispersión desde la cadera, la bala converge en lo que hay bajo la mira (incluidos los soldados), hay puesta a cero automática a la distancia del blanco, marca y sonido de impacto, y asistencia de apuntado suave en pantallas táctiles.

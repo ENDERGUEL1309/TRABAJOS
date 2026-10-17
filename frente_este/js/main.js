@@ -16,6 +16,7 @@ function cargarAjustes() {
     modo: a.modo || 'local',
     url: a.url || porDefecto,
     sala: a.sala || 'beta',
+    mapa: a.mapa || 'villa',
     faccion: a.faccion || 'auto',
     calidad: a.calidad || (tactil ? 'media' : 'alta'),
     fov: a.fov || (tactil ? 72 : 75),
@@ -31,6 +32,7 @@ $('opNombre').value = aj.nombre;
 $('opModo').value = aj.modo;
 $('opUrl').value = aj.url;
 $('opSala').value = aj.sala;
+$('opMapa').value = aj.mapa;
 $('opFaccion').value = aj.faccion;
 $('opCalidad').value = aj.calidad;
 $('opFov').value = aj.fov;
@@ -57,7 +59,7 @@ $('btnJugar').addEventListener('click', async () => {
   if (juego) return;
   Object.assign(aj, {
     nombre: $('opNombre').value.trim() || 'Soldado', modo: $('opModo').value, url: $('opUrl').value.trim(), sala: $('opSala').value.trim() || 'beta',
-    faccion: $('opFaccion').value, calidad: $('opCalidad').value, fov: Number($('opFov').value), sens: Number($('opSens').value), punto: $('opPunto').checked, controles: $('opControles').value,
+    faccion: $('opFaccion').value, calidad: $('opCalidad').value, fov: Number($('opFov').value), sens: Number($('opSens').value), punto: $('opPunto').checked, controles: $('opControles').value, mapa: $('opMapa').value,
   });
   tactil = aj.controles === 'tactil' ? true : aj.controles === 'pc' ? false : tactilDetectado;
   try { localStorage.setItem('frenteEste.ajustes', JSON.stringify(aj)); } catch { /* ignorar */ }
@@ -75,9 +77,9 @@ $('btnJugar').addEventListener('click', async () => {
   let url = aj.url;
   if (aj.modo === 'red') {
     if (!url) { $('estadoCarga').textContent = 'Indica la dirección del servidor (ws://IP:8080/ws)'; $('btnJugar').disabled = false; return; }
-    url += (url.includes('?') ? '&' : '?') + 'sala=' + encodeURIComponent(aj.sala);
+    url += (url.includes('?') ? '&' : '?') + 'sala=' + encodeURIComponent(aj.sala + '-' + aj.mapa); // cada mapa, su propia sala
   }
-  juego = new Juego({ nombre: aj.nombre, modo: aj.modo, url, faccion: aj.faccion, calidad: aj.calidad, ajustes, audio });
+  juego = new Juego({ nombre: aj.nombre, modo: aj.modo, url, faccion: aj.faccion, calidad: aj.calidad, mapa: aj.mapa, ajustes, audio });
   window.juego = juego;
   try {
     await juego.iniciar((t) => { $('estadoCarga').textContent = t; });

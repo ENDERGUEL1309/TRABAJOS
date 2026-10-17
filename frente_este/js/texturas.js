@@ -369,3 +369,71 @@ export function texFogonazo() {
   cache.fogonazo.wrapS = cache.fogonazo.wrapT = THREE.ClampToEdgeWrapping;
   return cache.fogonazo;
 }
+
+// Revestimiento de tablas horizontales (casas americanas de los 50). Blanco: se tiñe con color de vértice.
+export function texRevestimiento() {
+  if (cache.revest) return cache.revest;
+  const S = 256;
+  const [c, g] = canvas(S);
+  const rnd = mulberry32(51);
+  g.fillStyle = '#f2f0ea'; g.fillRect(0, 0, S, S);
+  const tabla = 16; // 256 px = 2 m -> tablas de 12,5 cm
+  for (let y = 0; y < S; y += tabla) {
+    const gr = g.createLinearGradient(0, y, 0, y + tabla);
+    gr.addColorStop(0, 'rgba(0,0,0,0.18)'); gr.addColorStop(0.15, 'rgba(255,255,255,0.08)'); gr.addColorStop(1, 'rgba(0,0,0,0.02)');
+    g.fillStyle = gr; g.fillRect(0, y, S, tabla);
+    g.fillStyle = 'rgba(40,35,30,0.35)'; g.fillRect(0, y, S, 1);
+  }
+  // Pintura desconchada y suciedad
+  for (let i = 0; i < 260; i++) {
+    const x = rnd() * S, y = rnd() * S, r = 1 + rnd() * 5;
+    g.fillStyle = rnd() < 0.7 ? `rgba(120,100,80,${0.08 + rnd() * 0.15})` : `rgba(255,255,255,${rnd() * 0.15})`;
+    g.beginPath(); g.ellipse(x, y, r * 2, r * 0.6, 0, 0, Math.PI * 2); g.fill();
+  }
+  const gr = g.createLinearGradient(0, S * 0.7, 0, S);
+  gr.addColorStop(0, 'rgba(90,75,55,0)'); gr.addColorStop(1, 'rgba(90,75,55,0.25)');
+  g.fillStyle = gr; g.fillRect(0, 0, S, S);
+  cache.revest = toTex(c);
+  return cache.revest;
+}
+
+// Tejas asfálticas
+export function texTejas() {
+  if (cache.tejas) return cache.tejas;
+  const S = 256;
+  const [c, g] = canvas(S);
+  const rnd = mulberry32(61);
+  g.fillStyle = '#4a4542'; g.fillRect(0, 0, S, S);
+  for (let y = 0; y < S; y += 21) {
+    const off = ((y / 21) % 2) * 16;
+    for (let x = -32; x < S; x += 32) {
+      const t = rnd();
+      g.fillStyle = `rgb(${62 + t * 30 | 0},${58 + t * 26 | 0},${55 + t * 22 | 0})`;
+      g.fillRect(x + off + 1, y + 1, 30, 19);
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(x + off, y + 18, 32, 3);
+    }
+  }
+  for (let i = 0; i < 2000; i++) { g.fillStyle = `rgba(${rnd() < 0.5 ? 0 : 200},${rnd() < 0.5 ? 0 : 190},${rnd() < 0.5 ? 0 : 170},0.08)`; g.fillRect(rnd() * S, rnd() * S, 1.5, 1.5); }
+  cache.tejas = toTex(c);
+  return cache.tejas;
+}
+
+// Suelo de madera para interiores
+export function texParquet() {
+  if (cache.parquet) return cache.parquet;
+  const S = 256;
+  const [c, g] = canvas(S);
+  const rnd = mulberry32(71);
+  for (let y = 0; y < S; y += 16) {
+    let x = -rnd() * 64;
+    while (x < S) {
+      const l = 48 + rnd() * 64, t = rnd();
+      g.fillStyle = `rgb(${120 + t * 40 | 0},${82 + t * 26 | 0},${50 + t * 16 | 0})`;
+      g.fillRect(x, y, l - 1, 15);
+      for (let k = 0; k < 4; k++) { g.fillStyle = 'rgba(60,35,20,0.15)'; g.fillRect(x, y + rnd() * 15, l, 1); }
+      x += l;
+    }
+  }
+  cache.parquet = toTex(c);
+  return cache.parquet;
+}

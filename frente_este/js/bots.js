@@ -50,9 +50,11 @@ export class IABot {
   elegirDestino() {
     const lado = this.s.faccion === 'UA' ? -1 : 1;
     // Preferir puntos de su mitad o del centro, con algo de aleatoriedad
-    const cand = PUNTOS.filter((p) => p.x * lado > -90 || Math.random() < 0.35);
+    const lista = this.j.mundo.puntosIA || PUNTOS;
+    const cand = this.j.mundo.puntosIA ? lista : lista.filter((p) => p.x * lado > -90 || Math.random() < 0.35);
     const p = cand[Math.floor(Math.random() * cand.length)].clone();
-    p.x += (Math.random() - 0.5) * 20; p.z += (Math.random() - 0.5) * 20;
+    const disp = this.j.mundo.puntosIA ? 3 : 20;
+    p.x += (Math.random() - 0.5) * disp; p.z += (Math.random() - 0.5) * disp;
     return p;
   }
 

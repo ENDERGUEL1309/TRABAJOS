@@ -89,8 +89,19 @@ function fusionar(geos) {
   return mergeGeometries(lista, false);
 }
 
+export { cajaGeo, conColor, fusionar, rotar };
+
 export class Mundo {
-  constructor(scene, renderer, calidad) {
+  // mapa: null para el Frente Este; o un módulo de mapa { id, configurar(mundo), construir(mundo) }
+  constructor(scene, renderer, calidad, mapa = null) {
+    this.mapa = mapa ? mapa.id : 'frente';
+    this.ZONA = ZONA; this.MAPA = MAPA;
+    this.alturaFn = alturaBase;
+    this.pasoInterior = calidad.pasoTerreno;
+    this.colorSuelo = null;   // (x, z, color, n1, n2) => void
+    this.infoHierba = null;   // (x, z, rnd) => null | { alto, verde }
+    this.limites = null;      // { x0, x1, z0, z1 } zona jugable
+    this.ajusteCielo = { hor: '#b5b8b4', cen: '#6f8296', sol: [-0.55, 0.32, -0.45], niebla: 0.0019, luz: 2.4, ambiente: 0.55 };
     this.scene = scene;
     this.calidad = calidad;
     this.rnd = mulberry32(2022);
@@ -100,11 +111,15 @@ export class Mundo {
     this.rejillaArboles = new Map();
     this.fuegos = [];             // posiciones de incendios para humo
     this.tiempo = 0;
-    this.trincheras = crearTrincheras();
+    if (mapa) mapa.configurar(this);
+    this.trincheras = mapa ? [] : crearTrincheras();
 
     this.crearCielo(renderer);
     this.crearLuces();
     this.crearTerreno();
+    this.hierba = new Map();
+    this.crearMaterialHierba();
+    if (mapa) { mapa.construir(this); return; }
     this.crearArboles();
     this.crearAldea();
     this.crearBloque();
@@ -113,15 +128,14 @@ export class Mundo {
     this.crearObstaculos();
     this.crearPostes();
     this.crearBases();
-    this.hierba = new Map();
-    this.crearMaterialHierba();
   }
 
   // ---------------- Cielo y luz ----------------
   crearCielo(renderer) {
-    this.colorHorizonte = new THREE.Color('#b5b8b4');
-    const cenit = new THREE.Color('#6f8296');
-    this.sol = new THREE.Vector3(-0.55, 0.32, -0.45).normalize();
+    const AC = this.ajusteCielo;
+    this.colorHorizonte = new THREE.Color(AC.hor);
+    const cenit = new THREE.Color(AC.cen);
+    this.sol = new THREE.Vector3(...AC.sol).normalize();
     const mat = new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false,
       uniforms: {
@@ -160,7 +174,7 @@ export class Mundo {
     this.cielo.frustumCulled = false;
     this.cielo.renderOrder = -1;
     this.scene.add(this.cielo);
-    this.scene.fog = new THREE.FogExp2(this.colorHorizonte.clone(), 0.0019);
+    this.scene.fog = new THREE.FogExp2(this.colorHorizonte.clone(), AC.niebla);
     this.scene.background = this.colorHorizonte.clone();
 
     // Mapa de entorno para reflejos PBR
@@ -176,7 +190,7 @@ export class Mundo {
   }
 
   crearLuces() {
-    const s = new THREE.DirectionalLight('#ffe2c0', 2.4);
+    const s = new THREE.DirectionalLight('#ffe2c0', this.ajusteCielo.luz);
     s.castShadow = true;
     const q = this.calidad;
     s.shadow.mapSize.set(q.sombra, q.sombra);
@@ -186,19 +200,21 @@ export class Mundo {
     s.shadow.normalBias = 0.05;
     this.luzSol = s;
     this.scene.add(s, s.target);
-    this.scene.add(new THREE.HemisphereLight('#b9c3cc', '#5b4c38', 0.55));
+    this.scene.add(new THREE.HemisphereLight('#b9c3cc', '#5b4c38', this.ajusteCielo.ambiente));
   }
 
   // ---------------- Terreno ----------------
   crearTerreno() {
     const q = this.calidad;
     // Rejilla interior
-    const n = Math.round((ZONA * 2) / q.pasoTerreno);
-    const paso = (ZONA * 2) / n;
+    const Z = this.ZONA, MP = this.MAPA, H = this.alturaFn;
+    const n = Math.round((Z * 2) / this.pasoInterior);
+    const paso = (Z * 2) / n;
     const N1 = n + 1;
     const alt = new Float32Array(N1 * N1);
-    for (let j = 0; j < N1; j++) for (let i = 0; i < N1; i++) alt[j * N1 + i] = alturaBase(-ZONA + i * paso, -ZONA + j * paso);
-    this.int = { n, paso, N1, x0: -ZONA, alt, oscuro: new Float32Array(N1 * N1) };
+    for (let j = 0; j < N1; j++) for (let i = 0; i < N1; i++) alt[j * N1 + i] = H(-Z + i * paso, -Z + j * paso);
+    this.int = { n, paso, N1, x0: -Z, alt, oscuro: new Float32Array(N1 * N1) };
+    void q;
 
     // Trincheras (estampado sobre la rejilla, combinando por máximo)
     const prof = new Float32Array(N1 * N1);
@@ -219,7 +235,7 @@ export class Mundo {
 
     // Cráteres de artillería preexistentes (más densos en tierra de nadie)
     const r = this.rnd;
-    for (let k = 0; k < 260; k++) {
+    for (let k = 0; k < (this.mapa === 'frente' ? 260 : 0); k++) {
       let x = (r() * 2 - 1) * (ZONA - 20), z = (r() * 2 - 1) * (ZONA - 20);
       if (r() < 0.6) x = (r() * 2 - 1) * 140;
       if (Math.hypot(x - ALDEA.x, z - ALDEA.z) < 60 && r() < 0.7) continue;
@@ -240,21 +256,21 @@ export class Mundo {
     this.scene.add(mI);
 
     // Rejilla exterior (baja resolución), hundida bajo la interior
-    const ne = 240, pe = (MAPA * 2) / ne, NE = ne + 1;
+    const ne = this.mapa === 'frente' ? 240 : 120, pe = (MP * 2) / ne, NE = ne + 1;
     const ae = new Float32Array(NE * NE);
     for (let j = 0; j < NE; j++) for (let i = 0; i < NE; i++) {
-      const x = -MAPA + i * pe, z = -MAPA + j * pe;
-      let h = alturaBase(x, z);
-      if (Math.abs(x) < ZONA - 0.01 && Math.abs(z) < ZONA - 0.01) h -= 4;
+      const x = -MP + i * pe, z = -MP + j * pe;
+      let h = H(x, z);
+      if (Math.abs(x) < Z - 0.01 && Math.abs(z) < Z - 0.01) h -= 4;
       ae[j * NE + i] = h;
     }
-    this.ext = { n: ne, paso: pe, N1: NE, x0: -MAPA, alt: ae, oscuro: new Float32Array(NE * NE) };
+    this.ext = { n: ne, paso: pe, N1: NE, x0: -MP, alt: ae, oscuro: new Float32Array(NE * NE) };
     const geoE = this.crearGeoRejilla(this.ext, false);
     const mE = new THREE.Mesh(geoE, mat);
     mE.receiveShadow = true;
     this.scene.add(mE);
     // Faldón para el horizonte
-    const anillo = new THREE.Mesh(new THREE.RingGeometry(MAPA * 1.41, 4000, 32, 1).rotateX(-Math.PI / 2),
+    const anillo = new THREE.Mesh(new THREE.RingGeometry(MP * 1.41, 4000, 32, 1).rotateX(-Math.PI / 2),
       new THREE.MeshStandardMaterial({ color: '#6b6347', roughness: 1 }));
     anillo.position.y = -2;
     this.scene.add(anillo);
@@ -319,6 +335,8 @@ export class Mundo {
       // Color
       const x = x0 + i * paso, z = x0 + j * paso;
       const n1 = noise2(x * 0.02, z * 0.02), n2 = noise2(x * 0.15, z * 0.15);
+      if (this.colorSuelo) this.colorSuelo(x, z, tmp, n1, n2);
+      else {
       const tipo = tipoCampo(x, z);
       if (tipo === 0) tmp.copy(C.arado).lerp(C.tierra, 0.5 + 0.5 * Math.sin(x * 2.2 + z * 0.3) * 0.5);
       else if (tipo === 1) tmp.copy(C.trigo).lerp(C.seca, 0.4 + n2 * 0.3);
@@ -330,6 +348,7 @@ export class Mundo {
       if (dc < 4.5) {
         const enAldea = Math.hypot(x - ALDEA.x, z - ALDEA.z) < ALDEA.r;
         tmp.lerp(enAldea ? C.asfalto : C.camino, clamp((4.5 - dc) / 1.5, 0, 1) * (0.8 + n2 * 0.2));
+      }
       }
       const pend = 1 - ny;
       if (pend > 0.12) tmp.lerp(C.tierra, clamp((pend - 0.12) * 4, 0, 0.9));
@@ -346,7 +365,7 @@ export class Mundo {
 
   // Cráter: deforma la rejilla interior y oscurece el suelo.
   crater(x, z, r, prof, actualizar = true) {
-    if (Math.abs(x) > ZONA - r - 2 || Math.abs(z) > ZONA - r - 2) return;
+    if (Math.abs(x) > this.ZONA - r - 2 || Math.abs(z) > this.ZONA - r - 2) return;
     const g = this.int;
     const R = r * 1.8;
     const [i0, i1, j0, j1] = this.estampar(x - R, z - R, x + R, z + R, (px, pz, k) => {
@@ -370,7 +389,7 @@ export class Mundo {
 
   // Altura exacta de la malla (misma triangulación que la geometría).
   getHeight(x, z) {
-    const g = Math.abs(x) < ZONA - 0.001 && Math.abs(z) < ZONA - 0.001 ? this.int : this.ext;
+    const g = Math.abs(x) < this.ZONA - 0.001 && Math.abs(z) < this.ZONA - 0.001 ? this.int : this.ext;
     const fx = clamp((x - g.x0) / g.paso, 0, g.n - 0.0001), fz = clamp((z - g.x0) / g.paso, 0, g.n - 0.0001);
     const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j;
     const N1 = g.N1, a = g.alt;
@@ -428,8 +447,8 @@ export class Mundo {
       const dx = p.x - a.x, dz = p.z - a.z, d = Math.hypot(dx, dz), m = r + a.r;
       if (d < m && d > 1e-4) { p.x = a.x + (dx / d) * m; p.z = a.z + (dz / d) * m; choque = true; }
     });
-    const L = MAPA - 30;
-    p.x = clamp(p.x, -L, L); p.z = clamp(p.z, -L, L);
+    if (this.limites) { const Lm = this.limites; p.x = clamp(p.x, Lm.x0, Lm.x1); p.z = clamp(p.z, Lm.z0, Lm.z1); }
+    else { const L = this.MAPA - 30; p.x = clamp(p.x, -L, L); p.z = clamp(p.z, -L, L); }
     return choque;
   }
 
@@ -525,6 +544,12 @@ export class Mundo {
       tryPlace(ALDEA.x + Math.cos(a) * d, ALDEA.z + Math.sin(a) * d, 0.6 + r() * 0.4);
     }
 
+    this.instanciarArboles(posiciones, (x) => r() < 0.22 || (Math.abs(x) < 170 && r() < 0.3));
+  }
+
+  // posiciones: [[x, z, escala], ...]; muertoFn(x, z) decide si el árbol está destrozado
+  instanciarArboles(posiciones, muertoFn = () => false) {
+    const r = this.rnd;
     const geoTronco = new THREE.CylinderGeometry(0.12, 0.22, 1, 6, 1).translate(0, 0.5, 0);
     // Copa: tarjetas de hojas con alfa, normales esféricas para simular volumen
     const tarjetas = [];
@@ -567,7 +592,7 @@ export class Mundo {
     const cA = new THREE.Color('#8f8a4c'), cB = new THREE.Color('#6a6d3a'), cC = new THREE.Color('#a77d3c'), tmp = new THREE.Color();
     posiciones.forEach(([x, z, esc], i) => {
       const y = this.getHeight(x, z) - 0.1;
-      const muerto = r() < 0.22 || (Math.abs(x) < 170 && r() < 0.3);
+      const muerto = muertoFn(x, z);
       const alto = (muerto ? 3 + r() * 4 : 6 + r() * 5) * esc;
       e.set((r() - 0.5) * 0.08, r() * 6.28, (r() - 0.5) * 0.08);
       q.setFromEuler(e);
@@ -588,7 +613,7 @@ export class Mundo {
         arbol.iSeco = ns++;
       }
       this.arboles.push(arbol);
-      if (Math.abs(x) < ZONA + 40 && Math.abs(z) < ZONA + 40) {
+      if (Math.abs(x) < this.ZONA + 40 && Math.abs(z) < this.ZONA + 40) {
         const k = Math.floor(x / 8) + ',' + Math.floor(z / 8);
         if (!this.rejillaArboles.has(k)) this.rejillaArboles.set(k, []);
         this.rejillaArboles.get(k).push(arbol);
@@ -676,10 +701,14 @@ export class Mundo {
     let k = 0;
     for (let i = 0; i < n; i++) {
       const x = (cx + r()) * S, z = (cz + r()) * S;
-      const tipo = tipoCampo(x, z);
-      if (tipo === 0 && r() < 0.8) continue;
-      if (distCarreteras(x, z) < 3.8) continue;
-      if (Math.abs(x) < ZONA && Math.abs(z) < ZONA) {
+      let info = null, tipo = 3;
+      if (this.infoHierba) { info = this.infoHierba(x, z, r); if (!info) continue; }
+      else {
+        tipo = tipoCampo(x, z);
+        if (tipo === 0 && r() < 0.8) continue;
+        if (distCarreteras(x, z) < 3.8) continue;
+      }
+      if (Math.abs(x) < this.ZONA && Math.abs(z) < this.ZONA) {
         const g = this.int;
         const ii = Math.round((x - g.x0) / g.paso), jj = Math.round((z - g.x0) / g.paso);
         const idx = jj * g.N1 + ii;
@@ -688,12 +717,12 @@ export class Mundo {
       let dentro = false;
       this.consultar(x, z, x, z, (col) => { if (x > col.min.x && x < col.max.x && z > col.min.z && z < col.max.z) dentro = true; });
       if (dentro) continue;
-      const alto = tipo === 3 ? 0.8 + r() * 0.9 : tipo === 1 ? 0.45 + r() * 0.3 : 0.6 + r() * 0.6;
+      const alto = info ? info.alto * (0.7 + r() * 0.6) : tipo === 3 ? 0.8 + r() * 0.9 : tipo === 1 ? 0.45 + r() * 0.3 : 0.6 + r() * 0.6;
       const ancho = 0.7 + r() * 0.7;
       q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, r() * 6.28);
       m.compose(p.set(x, this.getHeight(x, z) - 0.05, z), q, s.set(ancho, alto, ancho));
       im.setMatrixAt(k, m);
-      c.copy(seco).lerp(verde, tipo === 3 ? r() * 0.8 : r() * 0.3);
+      c.copy(seco).lerp(verde, info ? info.verde * (0.6 + r() * 0.4) : tipo === 3 ? r() * 0.8 : r() * 0.3);
       im.setColorAt(k, c);
       k++;
     }

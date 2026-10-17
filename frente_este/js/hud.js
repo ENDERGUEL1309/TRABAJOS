@@ -2,7 +2,7 @@
 // retícula de visor de vehículo y OSD de dron FPV.
 import * as THREE from 'three';
 import { FACCIONES } from './soldado.js';
-import { ZONA, MAPA, carreteraZ } from './mundo.js';
+import { carreteraZ } from './mundo.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -29,12 +29,12 @@ export class HUD {
   crearFondoMapa() {
     const c = document.createElement('canvas'); c.width = c.height = 256;
     const g = c.getContext('2d');
-    const W = this.j.mundo;
+    const W = this.j.mundo, ZONA = W.ZONA;
     const img = g.createImageData(256, 256);
     for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) {
       const wx = -ZONA + (x / 256) * ZONA * 2, wz = -ZONA + (y / 256) * ZONA * 2;
       const h = W.getHeight(wx, wz);
-      const v = 60 + (h + 10) * 2.2;
+      const v = W.mapa === 'frente' ? 60 + (h + 10) * 2.2 : 150 + h * 3;
       const i = (y * 256 + x) * 4;
       img.data[i] = v * 0.75; img.data[i + 1] = v * 0.8; img.data[i + 2] = v * 0.62; img.data[i + 3] = 235;
     }
@@ -133,28 +133,36 @@ export class HUD {
     const abrir = forzar ?? m.style.display === 'none';
     m.style.display = abrir ? '' : 'none';
     clearInterval(this.intMapa);
-    if (abrir) { this.dibujarMapaGrande(); this.intMapa = setInterval(() => this.dibujarMapaGrande(), 500); }
+    if (abrir) { document.getElementById('mapaPie').textContent = `Mapa de operaciones · cuadrícula de ${this.j.mundo.cuadricula || 200} m · toca para cerrar`; this.dibujarMapaGrande(); this.intMapa = setInterval(() => this.dibujarMapaGrande(), 500); }
   }
 
   fondoCompleto() {
     if (this.fondoGrande) return this.fondoGrande;
     const N = 512, c = document.createElement('canvas'); c.width = c.height = N;
     const g = c.getContext('2d'), W = this.j.mundo;
+    const MAPA = W.mapaVista || W.MAPA, ZONA = W.ZONA, CUAD = W.cuadricula || 200;
     const img = g.createImageData(N, N);
     const k = (MAPA * 2) / N;
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
       const wx = -MAPA + x * k, wz = -MAPA + y * k;
       const h = W.getHeight(wx, wz), hx = W.getHeight(wx + k, wz), hz = W.getHeight(wx, wz + k);
       const sombra = Math.max(0.55, Math.min(1.25, 1 + (h - hx) * 0.12 + (h - hz) * 0.12));
-      const base = 70 + (h + 15) * 1.6;
+      const base = W.mapa === 'frente' ? 70 + (h + 15) * 1.6 : 175 + h * 2;
       const i = (y * N + x) * 4;
       img.data[i] = base * 0.86 * sombra; img.data[i + 1] = base * 0.88 * sombra; img.data[i + 2] = base * 0.66 * sombra; img.data[i + 3] = 255;
     }
     g.putImageData(img, 0, 0);
     const m = (v) => (v + MAPA) / k;
     // Carretera principal
-    g.strokeStyle = 'rgba(205,190,160,0.7)'; g.lineWidth = 2;
-    g.beginPath(); for (let x = -MAPA; x <= MAPA; x += 20) { x === -MAPA ? g.moveTo(m(x), m(carreteraZ(x))) : g.lineTo(m(x), m(carreteraZ(x))); } g.stroke();
+    if (W.mapa === 'frente') {
+      g.strokeStyle = 'rgba(205,190,160,0.7)'; g.lineWidth = 2;
+      g.beginPath(); for (let x = -MAPA; x <= MAPA; x += 20) { x === -MAPA ? g.moveTo(m(x), m(carreteraZ(x))) : g.lineTo(m(x), m(carreteraZ(x))); } g.stroke();
+    } else {
+      // Calle y rotonda
+      g.fillStyle = 'rgba(55,55,52,0.9)';
+      g.fillRect(m(-50), m(-4.5), 100 / k, 9 / k);
+      g.beginPath(); g.arc(m(0), m(0), 12 / k, 0, Math.PI * 2); g.fill();
+    }
     // Árboles
     g.fillStyle = 'rgba(40,52,28,0.75)';
     for (const a of W.arboles) g.fillRect(m(a.x) - 0.7, m(a.z) - 0.7, 1.4, 1.4);
@@ -166,19 +174,22 @@ export class HUD {
     for (const [ax, az, bx, bz] of W.segTrinchera) { g.beginPath(); g.moveTo(m(ax), m(az)); g.lineTo(m(bx), m(bz)); g.stroke(); }
     // Cuadrícula de 200 m
     g.strokeStyle = 'rgba(255,255,255,0.12)'; g.lineWidth = 1; g.fillStyle = 'rgba(255,255,255,0.5)'; g.font = '9px monospace';
-    for (let v = -MAPA; v <= MAPA; v += 200) {
+    for (let v = -MAPA; v <= MAPA; v += CUAD) {
       g.beginPath(); g.moveTo(m(v), 0); g.lineTo(m(v), N); g.stroke();
       g.beginPath(); g.moveTo(0, m(v)); g.lineTo(N, m(v)); g.stroke();
     }
-    for (let i = 0; i < 12; i++) { g.fillText(String.fromCharCode(65 + i), m(-MAPA + i * 200) + 3, 10); g.fillText(String(i + 1), 2, m(-MAPA + i * 200) + 12); }
+    for (let i = 0; i < Math.round((MAPA * 2) / CUAD); i++) { g.fillText(String.fromCharCode(65 + i), m(-MAPA + i * CUAD) + 3, 10); g.fillText(String(i + 1), 2, m(-MAPA + i * CUAD) + 12); }
     // Zona de combate
-    g.strokeStyle = 'rgba(242,201,76,0.5)'; g.setLineDash([4, 4]); g.strokeRect(m(-ZONA), m(-ZONA), (ZONA * 2) / k, (ZONA * 2) / k); g.setLineDash([]);
+    g.strokeStyle = 'rgba(242,201,76,0.5)'; g.setLineDash([4, 4]);
+    const Lm = W.limites || { x0: -ZONA, x1: ZONA, z0: -ZONA, z1: ZONA };
+    g.strokeRect(m(Lm.x0), m(Lm.z0), (Lm.x1 - Lm.x0) / k, (Lm.z1 - Lm.z0) / k); g.setLineDash([]);
     this.fondoGrande = c;
     return c;
   }
 
   dibujarMapaGrande() {
     const J = this.j, cv = this.el.lienzoMapa, g = cv.getContext('2d');
+    const MAPA = J.mundo.mapaVista || J.mundo.MAPA;
     const S = cv.width, k = S / (MAPA * 2), m = (v) => (v + MAPA) * k;
     g.drawImage(this.fondoCompleto(), 0, 0, S, S);
     const L = J.local, ahora = performance.now();
@@ -186,10 +197,10 @@ export class HUD {
     for (const f of ['UA', 'RU']) {
       const B = J.mundo.bases[f];
       g.fillStyle = FACCIONES[f].color; g.globalAlpha = 0.85;
-      g.fillRect(m(B.x) - 6, m(0) - 6, 12, 12);
-      g.globalAlpha = 1; g.fillText('BASE ' + f, m(B.x), m(0) - 10);
+      g.fillRect(m(B.x) - 6, m(B.z || 0) - 6, 12, 12);
+      g.globalAlpha = 1; g.fillText((J.mundo.mapa === 'frente' ? 'BASE ' : 'INICIO ') + f, m(B.x), m(B.z || 0) - 10);
     }
-    g.fillStyle = '#e8e6da'; g.fillText('ALDEA', m(10), m(-20));
+    g.fillStyle = '#e8e6da'; if (J.mundo.mapa === 'frente') g.fillText('ALDEA', m(10), m(-20));
     for (const v of J.vehiculos) {
       if (v.destruido) continue;
       const amigo = v.conductor ? J.soldados.get(v.conductor)?.faccion === L.faccion : v.faccion === L.faccion;
@@ -249,7 +260,8 @@ export class HUD {
     const J = this.j, g = this.ctxM, S = g.canvas.width;
     const L = J.local;
     const centro = J.posFoco();
-    const escala = S / 220; // 220 m visibles
+    const ZONA = J.mundo.ZONA;
+    const escala = S / (J.mundo.vistaMinimapa || 220); // metros visibles
     g.save();
     g.clearRect(0, 0, S, S);
     g.beginPath(); g.arc(S / 2, S / 2, S / 2 - 1, 0, Math.PI * 2); g.clip();

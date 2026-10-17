@@ -2,6 +2,7 @@
 // sincronización de red (4 jugadores) e IA en partida local.
 import * as THREE from 'three';
 import { Mundo } from './mundo.js';
+import { VILLA } from './mapas/villa.js';
 import { Soldado, FACCIONES } from './soldado.js';
 import { ArmaLocal, Proyectiles, ARMAS } from './armas.js';
 import { CLASES, equipoPorDefecto, estadisticas } from './arsenal.js';
@@ -71,12 +72,12 @@ export class Juego {
     this.scene.add(this.camara);
     this.camaraActiva = this.camara;
 
-    await paso('Generando el terreno y las trincheras…');
-    this.mundo = new Mundo(this.scene, r, this.calidad);
+    await paso(this.opc.mapa === 'villa' ? 'Construyendo Villa Atómica…' : 'Generando el terreno y las trincheras…');
+    this.mundo = new Mundo(this.scene, r, this.calidad, this.opc.mapa === 'villa' ? VILLA : null);
     await paso('Cargando efectos y sonido…');
     this.efectos = new Efectos(this.scene, this.calidad);
     for (const f of this.mundo.fuegos) this.efectos.addFoco(f, 0.8);
-    for (const [x, z, t] of [[-700, 300, 2.5], [900, -500, 3], [450, 850, 2], [-300, -900, 2.5]]) this.efectos.addFoco(new THREE.Vector3(x, this.mundo.getHeight(x, z), z), t);
+    for (const [x, z, t] of this.mundo.columnasHumo || [[-700, 300, 2.5], [900, -500, 3], [450, 850, 2], [-300, -900, 2.5]]) this.efectos.addFoco(new THREE.Vector3(x, this.mundo.getHeight(x, z), z), t);
     this.audio = this.opc.audio || new Audio();
     this.postfx = new PostFX(r, this.scene, this.camara, this.calidad);
     this.entrada = new Entrada(lienzo, document.getElementById('tactil'), this.ajustes);
@@ -89,10 +90,12 @@ export class Juego {
       for (const v of B.vehiculos) this.vehiculos.push(new Vehiculo(this, { id: 'v' + n++, tipo: v.tipo, faccion: fac, x: v.x, z: v.z, yaw: B.yaw }));
       for (const a of B.aeronaves) this.vehiculos.push(new Aeronave(this, { id: 'v' + n++, tipo: a.tipo, faccion: fac, x: a.x, z: a.z, yaw: B.yaw }));
     }
-    crearRestos(this, 'tanque', 'RU', 35, 140, 0.8);
-    crearRestos(this, 'mtlb', 'RU', 105, -25, 2.2);
-    crearRestos(this, 'tanque', 'UA', -75, 125, -1.2);
-    crearRestos(this, 'tecnica', 'UA', -125, -105, 0.3);
+    if (this.mundo.mapa === 'frente') {
+      crearRestos(this, 'tanque', 'RU', 35, 140, 0.8);
+      crearRestos(this, 'mtlb', 'RU', 105, -25, 2.2);
+      crearRestos(this, 'tanque', 'UA', -75, 125, -1.2);
+      crearRestos(this, 'tecnica', 'UA', -125, -105, 0.3);
+    }
 
     // Red o partida local
     let faccion = this.opc.faccion === 'RU' ? 'RU' : 'UA';
@@ -293,7 +296,8 @@ export class Juego {
     // Reabastecimiento en la base propia
     const B = this.mundo.bases[s.faccion];
     const C = CLASES[this.equipo.clase];
-    if (Math.abs(s.pos.x - B.x) < 30 && Math.abs(s.pos.z) < 60 && (this.tReponer -= dt) <= 0) {
+    const enBase = B.radio ? Math.hypot(s.pos.x - B.x, s.pos.z - (B.z || 0)) < B.radio : Math.abs(s.pos.x - B.x) < 30 && Math.abs(s.pos.z) < 60;
+    if (enBase && (this.tReponer -= dt) <= 0) {
       this.tReponer = 8;
       if (A.reabastecer() || this.dronesRest < C.drones || this.granadas < C.granadas) { A.reponer(); this.dronesRest = C.drones; this.granadas = C.granadas; this.hud.mensaje('Munición, granadas y drones repuestos', 2); }
     }
@@ -916,8 +920,9 @@ export class Juego {
   actualizarDespliegue(dt) {
     const c = this.camara, t = this.tiempo * 0.03;
     const B = this.mundo.bases[this.local.faccion];
-    c.position.set(B.x * 0.6 + Math.cos(t) * 120, 140, Math.sin(t) * 120);
-    c.lookAt(0, 0, 0);
+    const CD = this.mundo.camDespliegue;
+    if (CD) { c.position.set(CD.x + Math.cos(t * 3) * CD.r, CD.h, CD.z + Math.sin(t * 3) * CD.r); c.lookAt(CD.x, 2, CD.z); }
+    else { c.position.set(B.x * 0.6 + Math.cos(t) * 120, 140, Math.sin(t) * 120); c.lookAt(0, 0, 0); }
     if (c.fov !== 60) { c.fov = 60; c.updateProjectionMatrix(); }
     this.postfx.setPerfil('vehiculo3');
     void dt;

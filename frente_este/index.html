@@ -85,7 +85,7 @@
   </div>
 
   <div id="tactil"></div>
-  <div id="mapaGrande" style="display:none"><canvas id="lienzoMapa" width="1024" height="1024"></canvas><p>Mapa de operaciones · cuadrícula de 200 m · toca para cerrar</p></div>
+  <div id="mapaGrande" style="display:none"><canvas id="lienzoMapa" width="1024" height="1024"></canvas><p id="mapaPie">Mapa de operaciones · toca para cerrar</p></div>
   <div id="despliegue" style="display:none"></div>
 
   <div id="menu">
@@ -94,6 +94,9 @@
       <p class="sub">Shooter táctico realista · Beta 0.2 · 4 jugadores</p>
       <div class="filas">
         <label>Nombre <input id="opNombre" maxlength="16" autocomplete="off"></label>
+        <label>Mapa
+          <select id="opMapa"><option value="villa">Villa Atómica (arena pequeña · infantería)</option><option value="frente">Frente Este (2,4 km · vehículos y aeronaves)</option></select>
+        </label>
         <label>Modo
           <select id="opModo"><option value="local">Partida local (con IA)</option><option value="red">Multijugador beta (servidor)</option></select>
         </label>
