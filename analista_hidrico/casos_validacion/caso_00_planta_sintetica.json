@@ -1,0 +1,22 @@
+{
+  "nombre": "Planta sintética (verdad conocida)",
+  "fuente": {
+    "documento": "data/generar_datos.py",
+    "referencia": "Datos simulados con relaciones definidas a mano; sirve como control positivo antes de usar casos reales."
+  },
+  "datos": "../data/sample_water_flow.csv",
+  "contexto": "Planta potabilizadora convencional (coagulación-floculación, sedimentación, filtración, cloración). Datos horarios de SCADA.",
+  "pregunta": "¿Qué variables controlan la turbidez del agua tratada y qué pasaría con el cumplimiento de 1 NTU si la turbidez cruda aumenta un 30 %?",
+  "esperado": {
+    "variable_objetivo": "turbidez_tratada_NTU",
+    "variables_clave": ["turbidez_cruda_NTU", "dosis_coagulante_mgL"],
+    "top_k": 3,
+    "efectos": {
+      "turbidez_cruda_NTU": "aumenta",
+      "dosis_coagulante_mgL": "disminuye",
+      "caudal_entrada_m3h": "aumenta"
+    },
+    "metricas": {},
+    "conclusion_referencia": "La turbidez tratada depende principalmente de la turbidez cruda (efecto positivo) y de la dosis de coagulante (efecto negativo, con rendimientos decrecientes); el caudal la aumenta levemente al reducir el tiempo de residencia. Durante eventos de lluvia la dosificación, que reacciona con unas 2 horas de retraso, se queda corta y la turbidez tratada supera 1 NTU. Un aumento de 30 % en la turbidez cruda eleva la turbidez tratada media y la frecuencia de superación de 1 NTU; se recomienda dosificación anticipada (feed-forward) basada en turbidez cruda y vigilar los picos."
+  }
+}

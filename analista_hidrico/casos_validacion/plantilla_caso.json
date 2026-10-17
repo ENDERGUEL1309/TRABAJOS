@@ -1,0 +1,31 @@
+{
+  "nombre": "Título corto del caso (autor, año)",
+  "fuente": {
+    "documento": "Tesis / artículo / informe — cita completa",
+    "referencia": "URL o DOI; página o tabla de donde salen los datos crudos y la conclusión"
+  },
+  "datos": "datos_caso_01.csv",
+  "hoja": 0,
+  "contexto": "Tipo de planta o sistema, procesos, ubicación, periodo y unidades. Todo lo que el autor sabía y el agente no.",
+  "pregunta": "La pregunta de investigación del documento, formulada como se la haría un operador.",
+  "esperado": {
+    "variable_objetivo": "nombre_exacto_de_columna",
+    "variables_clave": ["columna_mas_influyente", "segunda_columna"],
+    "top_k": 3,
+    "efectos": {
+      "columna_mas_influyente": "aumenta",
+      "segunda_columna": "disminuye"
+    },
+    "metricas": {
+      "R2_test": {"valor": 0.85, "tolerancia": 0.10},
+      "RMSE_test": {"valor": 1.2, "tolerancia": 0.4}
+    },
+    "conclusion_referencia": "Copie aquí, con sus palabras o literal, la conclusión del documento que el agente debería alcanzar."
+  },
+  "_notas": [
+    "Borre los criterios que el documento no reporta (p. ej. 'metricas': {}); no cuentan en el puntaje.",
+    "Use nombres de columnas exactamente como en el archivo de datos.",
+    "Direcciones válidas: aumenta, disminuye, no_significativo, no_lineal.",
+    "Las métricas solo son comparables si el agente usa un esquema de validación parecido al del documento: indíquelo en 'contexto' o en 'pregunta'."
+  ]
+}
