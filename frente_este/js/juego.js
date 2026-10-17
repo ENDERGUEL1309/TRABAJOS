@@ -1005,7 +1005,8 @@ export class Juego {
       if (mat && mat !== 'aire') this.audio.impacto(imp.p, mat);
       if (!b.local) return;
       if (imp.soldado) {
-        const mult = imp.parte === 'cabeza' ? 3.5 : imp.parte === 'pierna' ? 0.65 : 1;
+        // Casco y placas balísticas reducen algo el daño; brazos y piernas reciben menos
+        const mult = { cabeza: 3.2, torso: 0.85, brazo: 0.6, pierna: 0.65 }[imp.parte] || 1;
         this.danoSoldado(imp.soldado, b.danoSold * mult, b.duenoId, b.arma, imp.n);
       } else if (imp.vehiculo) this.danoVehiculo(imp.vehiculo, b.dano[imp.vehiculo.def.blindaje] || 0, b.duenoId);
       else if (imp.dron) this.derribarDron(imp.dron, b.duenoId);

@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as TX from './texturas.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { materialesSoldado } from './soldadoModelo.js';
 
 const mats = {};
 function mat(nombre) {
@@ -133,17 +135,33 @@ function segmento(geo, mat, desde, hasta) {
   return m;
 }
 export function crearBrazos(faccion, manoIzq = new THREE.Vector3(-0.025, 0.02, -0.3)) {
-  const camo = new THREE.MeshStandardMaterial({ map: TX.texCamo(faccion), roughness: 0.95 });
+  const M = materialesSoldado(faccion);
   const G = new THREE.Group();
-  const manga = new THREE.CapsuleGeometry(0.042, 0.4, 3, 10);
-  const guante = new THREE.BoxGeometry(0.06, 0.055, 0.1);
+  const manga = new THREE.CapsuleGeometry(0.045, 0.4, 3, 12);
   // Derecha: mano en el pistolete, codo abajo a la derecha y hacia atrás
   const manoD = new THREE.Vector3(0.0, -0.05, 0.04);
-  G.add(segmento(manga, camo, new THREE.Vector3(0.02, -0.08, 0.1), new THREE.Vector3(0.14, -0.3, 0.38)));
-  const md = new THREE.Mesh(guante, mat('guante')); md.position.copy(manoD); md.rotation.x = -0.35; G.add(md);
+  G.add(segmento(manga, M.uniforme, new THREE.Vector3(0.02, -0.08, 0.1), new THREE.Vector3(0.14, -0.3, 0.38)));
+  G.add(guante(M, manoD, -0.35, 0));
   // Izquierda: mano bajo el guardamanos, codo abajo a la izquierda
-  G.add(segmento(manga, camo, manoIzq.clone().add(new THREE.Vector3(-0.03, -0.05, 0.08)), new THREE.Vector3(-0.2, -0.32, 0.05)));
-  const mi = new THREE.Mesh(guante, mat('guante')); mi.position.copy(manoIzq).add(new THREE.Vector3(0, -0.025, 0)); mi.rotation.set(0.15, 0, 0.6); G.add(mi);
+  G.add(segmento(manga, M.uniforme, manoIzq.clone().add(new THREE.Vector3(-0.03, -0.05, 0.08)), new THREE.Vector3(-0.2, -0.32, 0.05)));
+  G.add(guante(M, manoIzq.clone().add(new THREE.Vector3(0, -0.025, 0)), 0.15, 0.6));
   G.traverse((o) => { if (o.isMesh) o.castShadow = false; });
   return G;
+}
+
+// Guante táctico: palma, dedos cerrados, pulgar y nudillera rígida
+function guante(M, pos, rx, rz) {
+  const g = new THREE.Group();
+  g.position.copy(pos); g.rotation.set(rx, 0, rz);
+  const palma = new THREE.Mesh(new RoundedBoxGeometry(0.07, 0.045, 0.09, 2, 0.015), M.guante);
+  const dedos = new THREE.Mesh(new RoundedBoxGeometry(0.068, 0.04, 0.05, 2, 0.015), M.guante);
+  dedos.position.set(0, -0.025, -0.045); dedos.rotation.x = 0.9;
+  const pulgar = new THREE.Mesh(new THREE.CapsuleGeometry(0.013, 0.04, 2, 6), M.guante);
+  pulgar.position.set(-0.035, 0.005, -0.03); pulgar.rotation.set(1.3, 0, 0.5);
+  const nud = new THREE.Mesh(new RoundedBoxGeometry(0.06, 0.012, 0.03, 2, 0.005), M.nudillera);
+  nud.position.set(0, 0.026, -0.035);
+  const puno = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.042, 0.04, 10).rotateX(Math.PI / 2), M.guante);
+  puno.position.set(0, 0, 0.055);
+  g.add(palma, dedos, pulgar, nud, puno);
+  return g;
 }

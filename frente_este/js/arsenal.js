@@ -2,13 +2,14 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { material } from './modelos.js';
+import { crearDesdePerfil, ARMAS_CON_PERFIL } from './armasPerfil.js';
 
 // dano: daño a vehículos por tipo de blindaje
 const BALA = { pesado: 0, ligero: 0.5, ninguno: 5 };
 export const ARMAS = {
   // --- Fusiles de asalto ---
   ak74: { nombre: 'AK-74M', tipo: 'fusil', municion: '5,45×39', cadencia: 650, auto: true, vel: 880, danoSold: 34, cargador: 30, cargadores: 6, recarga: 2.6, retroceso: 0.014, dispCadera: 0.012, dispMira: 0.0016, dano: BALA, trazadora: 4, calibre: 1,
-    modelo: { familia: 'ak', canon: 0.42, madera: true }, mira: 'colimador' },
+    modelo: { familia: 'ak', canon: 0.42, madera: true }, mira: 'reflex' },
   ak12: { nombre: 'AK-12', tipo: 'fusil', municion: '5,45×39', cadencia: 700, auto: true, vel: 900, danoSold: 33, cargador: 30, cargadores: 6, recarga: 2.5, retroceso: 0.013, dispCadera: 0.012, dispMira: 0.0015, dano: BALA, trazadora: 4, calibre: 1,
     modelo: { familia: 'ak', canon: 0.42, riel: true }, mira: 'colimador' },
   m4a1: { nombre: 'M4A1', tipo: 'fusil', municion: '5,56×45', cadencia: 800, auto: true, vel: 900, danoSold: 31, cargador: 30, cargadores: 6, recarga: 2.3, retroceso: 0.011, dispCadera: 0.011, dispMira: 0.0014, dano: BALA, trazadora: 4, calibre: 1,
@@ -48,6 +49,7 @@ export const ACCESORIOS = {
   mira: {
     hierro: { nombre: 'Miras metálicas', zoom: 1.1 },
     colimador: { nombre: 'Colimador (punto rojo)', zoom: 1.25 },
+    reflex: { nombre: 'Mira réflex abierta', zoom: 1.2 },
     holo: { nombre: 'Holográfico', zoom: 1.3 },
     acog: { nombre: 'Óptica 4×', zoom: 4, visor: true },
     pso1: { nombre: 'PSO-1 4×', zoom: 4, visor: true, reticula: 'pso' },
@@ -74,8 +76,8 @@ export const ACCESORIOS = {
 
 // Qué accesorios admite cada tipo de arma
 const PERMITIDOS = {
-  fusil: { mira: ['hierro', 'colimador', 'holo', 'acog'], boca: ['ninguno', 'silenciador', 'compensador', 'apagallamas'], empunadura: ['ninguna', 'vertical', 'angulada'], cargador: ['estandar', 'ampliado', 'rapido'] },
-  carabina: { mira: ['hierro', 'colimador', 'holo'], boca: ['ninguno', 'silenciador', 'compensador'], empunadura: ['ninguna', 'vertical', 'angulada'], cargador: ['estandar', 'ampliado', 'rapido'] },
+  fusil: { mira: ['hierro', 'colimador', 'reflex', 'holo', 'acog'], boca: ['ninguno', 'silenciador', 'compensador', 'apagallamas'], empunadura: ['ninguna', 'vertical', 'angulada'], cargador: ['estandar', 'ampliado', 'rapido'] },
+  carabina: { mira: ['hierro', 'colimador', 'reflex', 'holo'], boca: ['ninguno', 'silenciador', 'compensador'], empunadura: ['ninguna', 'vertical', 'angulada'], cargador: ['estandar', 'ampliado', 'rapido'] },
   ametralladora: { mira: ['hierro', 'colimador', 'holo', 'acog'], boca: ['ninguno', 'compensador', 'apagallamas'], empunadura: ['bipode', 'ninguna', 'vertical'], cargador: ['estandar', 'rapido'] },
   tirador: { mira: ['pso1', 'acog', 'colimador'], boca: ['ninguno', 'silenciador', 'compensador'], empunadura: ['ninguna', 'bipode'], cargador: ['estandar', 'ampliado'] },
   francotirador: { mira: ['tele8', 'acog'], boca: ['ninguno', 'silenciador', 'compensador'], empunadura: ['bipode', 'ninguna'], cargador: ['estandar'] },
@@ -150,9 +152,18 @@ export function crearModeloArma(id, acc = accesoriosPorDefecto(id)) {
   const a = ARMAS[id], M = a.modelo;
   const p = [];
   const mad = M.madera ? 'marron' : M.color || 'polimero';
-  let bocaZ = -0.6, bocaY = 0.055, rielY = 0.1, manoIzq = new THREE.Vector3(-0.025, 0.02, -0.3);
+  let bocaZ = -0.6, bocaY = 0.055, rielY = 0.1, rielZ = -0.06, manoIzq = new THREE.Vector3(-0.025, 0.02, -0.3);
   const f = M.familia;
-  if (f === 'ak' || f === 'ar' || f === 'bren' || f === 'pkm' || f === 'svd' || f === 'cerrojo' || f === 'm82') {
+  const conPerfil = ARMAS_CON_PERFIL[id];
+  let perfil = null;
+  if (conPerfil) {
+    // Modelo a partir de la foto de referencia
+    perfil = crearDesdePerfil(conPerfil.perfil, { escala: conPerfil.escala || 1, materiales: conPerfil.materiales || {} });
+    const A = perfil.anclas;
+    bocaZ = A.boca.z; bocaY = A.boca.y;
+    rielY = A.riel.y; rielZ = A.riel.z;
+    manoIzq = new THREE.Vector3(-0.025, A.manoIzq.y, A.manoIzq.z);
+  } else if (f === 'ak' || f === 'ar' || f === 'bren' || f === 'pkm' || f === 'svd' || f === 'cerrojo' || f === 'm82') {
     const L = M.canon;
     const recL = f === 'pkm' || f === 'm82' ? 0.38 : 0.3;
     p.push([caja(0.052, 0.075, recL, 0, 0.035, -0.05), f === 'bren' ? (M.color || 'verdeOliva') : 'pavonado']);
@@ -227,37 +238,56 @@ export function crearModeloArma(id, acc = accesoriosPorDefecto(id)) {
   if (acc.boca === 'silenciador') { p.push([cil(0.022, 0.022, 0.17, 0, bocaY, bocaZ - 0.085, 14), 'pavonado']); bocaZ -= 0.17; }
   else if (acc.boca === 'compensador') { p.push([cil(0.019, 0.019, 0.06, 0, bocaY, bocaZ - 0.03, 8), 'acero']); bocaZ -= 0.06; }
   else if (acc.boca === 'apagallamas') { p.push([cil(0.017, 0.014, 0.05, 0, bocaY, bocaZ - 0.025, 6), 'pavonado']); bocaZ -= 0.05; }
-  const G = grupo(p);
+  const G = p.length ? grupo(p) : new THREE.Group();
+  if (perfil) G.add(perfil.grupo);
   // Miras
   let miraY = rielY + 0.035, miraZ = 0.0, punto = null;
   const tipoMira = ARMAS[id].tipo === 'lanzador' ? 'hierro' : acc.mira;
-  if (tipoMira === 'hierro') {
+  if (tipoMira === 'hierro' && perfil) {
+    // El perfil ya trae miras metálicas (AK, pistola); el M4 de cajón plano necesita alza
+    const al = perfil.anclas.alza;
+    if (conPerfil.perfil === 'm4') G.add(grupo([[caja(0.026, 0.03, 0.03, 0, rielY + 0.012, rielZ + 0.01), 'pavonado']]));
+    miraY = conPerfil.perfil === 'm4' ? rielY + 0.022 : al.y + 0.004; miraZ = al.z;
+  } else if (tipoMira === 'hierro') {
     const alza = grupo([[caja(0.03, 0.02, 0.012, 0, rielY + 0.005, -0.02), 'pavonado']]);
     G.add(alza);
     miraY = rielY + 0.012; miraZ = 0.0;
     if (f === 'rpg' || f === 'nlaw' || f === 'rpg26') { miraY = 0.14; }
-  } else if (tipoMira === 'colimador' || tipoMira === 'holo') {
-    if (tipoMira === 'colimador') {
-      G.add(grupo([[caja(0.03, 0.012, 0.07, 0, rielY + 0.004, -0.06), 'pavonado']]));
+  } else if (tipoMira === 'colimador' || tipoMira === 'holo' || tipoMira === 'reflex') {
+    if (tipoMira === 'reflex') {
+      // Mira réflex abierta (según foto): base sobre riel, ventana con capucha y mando de brillo
+      const sh = new THREE.Shape();
+      sh.moveTo(-0.024, 0); sh.lineTo(0.024, 0); sh.lineTo(0.024, 0.026); sh.quadraticCurveTo(0.024, 0.036, 0.014, 0.036); sh.lineTo(-0.014, 0.036); sh.quadraticCurveTo(-0.024, 0.036, -0.024, 0.026); sh.lineTo(-0.024, 0);
+      const hueco = new THREE.Path(); hueco.moveTo(-0.019, 0.004); hueco.lineTo(0.019, 0.004); hueco.lineTo(0.019, 0.024); hueco.quadraticCurveTo(0.019, 0.031, 0.012, 0.031); hueco.lineTo(-0.012, 0.031); hueco.quadraticCurveTo(-0.019, 0.031, -0.019, 0.024); hueco.lineTo(-0.019, 0.004);
+      sh.holes.push(hueco);
+      const ventana = new THREE.ExtrudeGeometry(sh, { depth: 0.012, bevelEnabled: true, bevelThickness: 0.0015, bevelSize: 0.001, bevelSegments: 2 }).translate(0, rielY + 0.012, rielZ - 0.03);
+      G.add(grupo([[caja(0.03, 0.012, 0.085, 0, rielY + 0.004, rielZ), 'pavonado'], [ventana, 'pavonado'], [caja(0.03, 0.022, 0.04, 0, rielY + 0.02, rielZ + 0.028), 'pavonado'],
+        [new THREE.CylinderGeometry(0.011, 0.011, 0.012, 14).rotateZ(Math.PI / 2).translate(0.019, rielY + 0.022, rielZ), 'polimero']]));
+      const cristal = new THREE.Mesh(new THREE.PlaneGeometry(0.038, 0.026), new THREE.MeshStandardMaterial({ color: '#c8e0ff', transparent: true, opacity: 0.12, metalness: 0.9, roughness: 0.05, depthWrite: false }));
+      cristal.position.set(0, rielY + 0.03, rielZ - 0.024); G.add(cristal);
+    } else if (tipoMira === 'colimador') {
+      G.add(grupo([[caja(0.03, 0.012, 0.07, 0, rielY + 0.004, rielZ), 'pavonado']]));
       const tubo = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.065, 16, 1, true).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#1b1c1e', roughness: 0.5, metalness: 0.7, side: THREE.DoubleSide }));
-      tubo.position.set(0, rielY + 0.035, -0.06); G.add(tubo);
+      tubo.position.set(0, rielY + 0.035, rielZ); G.add(tubo);
     } else {
-      const marco = grupo([[caja(0.045, 0.012, 0.08, 0, rielY + 0.004, -0.06), 'pavonado'], [caja(0.006, 0.045, 0.07, -0.022, rielY + 0.033, -0.06), 'pavonado'], [caja(0.006, 0.045, 0.07, 0.022, rielY + 0.033, -0.06), 'pavonado'], [caja(0.05, 0.006, 0.07, 0, rielY + 0.058, -0.06), 'pavonado']]);
+      const marco = grupo([[caja(0.045, 0.012, 0.08, 0, rielY + 0.004, rielZ), 'pavonado'], [caja(0.006, 0.045, 0.07, -0.022, rielY + 0.033, rielZ), 'pavonado'], [caja(0.006, 0.045, 0.07, 0.022, rielY + 0.033, rielZ), 'pavonado'], [caja(0.05, 0.006, 0.07, 0, rielY + 0.058, rielZ), 'pavonado']]);
       G.add(marco);
     }
     miraY = rielY + 0.035;
     const tex = texReticula(tipoMira);
     punto = new THREE.Mesh(new THREE.PlaneGeometry(0.012, 0.012), new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false, depthTest: false, depthWrite: false }));
-    punto.position.set(0, miraY, -0.11);
+    if (tipoMira === 'reflex') miraY = rielY + 0.03;
+    miraZ = rielZ + 0.06; // el ojo se coloca detrás de la mira, no sobre la culata
+    punto.position.set(0, miraY, rielZ - 0.05);
     punto.renderOrder = 10;
     G.add(punto);
   } else {
     // Óptica de aumento
     const largo = tipoMira === 'tele8' ? 0.34 : 0.22, r = tipoMira === 'tele8' ? 0.024 : 0.02;
     const y = rielY + 0.045;
-    G.add(grupo([[cil(r, r, largo, 0, y, -0.06, 16), 'pavonado'], [cil(r * 1.35, r, 0.05, 0, y, -0.06 - largo / 2, 16), 'pavonado'], [cil(r * 1.2, r, 0.04, 0, y, -0.06 + largo / 2, 16), 'pavonado'],
-      [caja(0.02, 0.03, 0.03, 0, rielY + 0.015, -0.1), 'pavonado'], [caja(0.02, 0.03, 0.03, 0, rielY + 0.015, 0.0), 'pavonado'], [cil(0.008, 0.008, 0.02, 0.0, y + r, -0.06, 8).rotateX(Math.PI / 2), 'pavonado']]));
-    miraY = y; miraZ = -0.06 + largo / 2 + 0.07;
+    G.add(grupo([[cil(r, r, largo, 0, y, rielZ, 16), 'pavonado'], [cil(r * 1.35, r, 0.05, 0, y, rielZ - largo / 2, 16), 'pavonado'], [cil(r * 1.2, r, 0.04, 0, y, rielZ + largo / 2, 16), 'pavonado'],
+      [caja(0.02, 0.03, 0.03, 0, rielY + 0.015, rielZ - 0.04), 'pavonado'], [caja(0.02, 0.03, 0.03, 0, rielY + 0.015, rielZ + 0.06), 'pavonado'], [cil(0.008, 0.008, 0.02, 0.0, y + r, rielZ, 8).rotateX(Math.PI / 2), 'pavonado']]));
+    miraY = y; miraZ = rielZ + largo / 2 + 0.07;
   }
   const boca = new THREE.Object3D(); boca.position.set(0, bocaY, bocaZ); G.add(boca);
   const mira = new THREE.Object3D(); mira.position.set(0, miraY, miraZ); G.add(mira);
@@ -274,6 +304,7 @@ function texReticula(tipo) {
   g.strokeStyle = g.fillStyle = '#ff2a1a';
   g.shadowColor = '#ff2a1a'; g.shadowBlur = 4;
   if (tipo === 'holo') { g.lineWidth = 2.5; g.beginPath(); g.arc(32, 32, 22, 0, Math.PI * 2); g.stroke(); }
+  if (tipo === 'reflex') { g.lineWidth = 2.5; for (const [x0, y0, x1, y1] of [[8, 32, 24, 32], [40, 32, 56, 32], [32, 8, 32, 24], [32, 40, 32, 56]]) { g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); } }
   g.beginPath(); g.arc(32, 32, 3.5, 0, Math.PI * 2); g.fill();
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;

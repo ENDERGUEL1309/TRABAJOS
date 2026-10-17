@@ -437,3 +437,140 @@ export function texParquet() {
   cache.parquet = toTex(c);
   return cache.parquet;
 }
+
+// ---------------- Materiales de armas ----------------
+// Madera de nogal barnizada con veta longitudinal (eje u = largo del arma)
+export function texVetaMadera() {
+  if (cache.veta) return cache.veta;
+  const S = 512;
+  const [c, g] = canvas(S);
+  const img = g.createImageData(S, S);
+  const hf = new Float32Array(S * S);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const warp = tileNoise(x, y, S, S, 0.004, 3) * 14;
+    const anillos = Math.sin((y + warp) * 0.11) * 0.5 + 0.5;
+    const fibra = tileNoise(x * 0.25, y * 4, S * 0.25, S * 4, 0.06, 2) * 0.5 + 0.5;
+    const mancha = tileNoise(x, y, S, S, 0.01, 2) * 0.5 + 0.5;
+    const t = anillos * 0.3 + fibra * 0.45 + mancha * 0.25;
+    const i = (y * S + x) * 4;
+    // Nogal laminado rojizo, como el de la foto de referencia
+    img.data[i] = 78 + t * 48; img.data[i + 1] = 34 + t * 22; img.data[i + 2] = 16 + t * 12; img.data[i + 3] = 255;
+    hf[y * S + x] = fibra * 0.7 + anillos * 0.3;
+  }
+  g.putImageData(img, 0, 0);
+  const rnd = mulberry32(81);
+  for (let k = 0; k < 90; k++) { g.fillStyle = `rgba(40,15,5,${rnd() * 0.18})`; g.beginPath(); g.ellipse(rnd() * S, rnd() * S, 2 + rnd() * 8, 1 + rnd() * 2, 0, 0, Math.PI * 2); g.fill(); }
+  cache.veta = { map: toTex(c, { repeat: 3 }), normalMap: toTex(normalFromHeight(hf, S, S, 0.6), { srgb: false, repeat: 3 }) };
+  return cache.veta;
+}
+
+// Acero pavonado / fosfatado con arañazos finos (mapa de color y de rugosidad)
+export function texMetalArma() {
+  if (cache.metalArma) return cache.metalArma;
+  const S = 256;
+  const [c, g] = canvas(S), [c2, g2] = canvas(S);
+  const img = g.createImageData(S, S), rug = g2.createImageData(S, S);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const n = tileNoise(x, y, S, S, 0.04, 3) * 0.5 + 0.5;
+    const i = (y * S + x) * 4;
+    const v = 200 + n * 55;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255;
+    const r = 120 + n * 90;
+    rug.data[i] = rug.data[i + 1] = rug.data[i + 2] = r; rug.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0); g2.putImageData(rug, 0, 0);
+  const rnd = mulberry32(83);
+  for (let k = 0; k < 160; k++) {
+    const x = rnd() * S, y = rnd() * S, l = 4 + rnd() * 30, a = (rnd() - 0.5) * 0.6;
+    g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 0.6;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
+    g2.strokeStyle = 'rgba(40,40,40,0.8)'; g2.lineWidth = 0.8;
+    g2.beginPath(); g2.moveTo(x, y); g2.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g2.stroke();
+  }
+  cache.metalArma = { map: toTex(c, { repeat: 6 }), roughnessMap: toTex(c2, { srgb: false, repeat: 6 }) };
+  return cache.metalArma;
+}
+
+// Polímero con textura punteada (empuñaduras, armazones, culatas)
+export function texPolimero() {
+  if (cache.polimero) return cache.polimero;
+  const S = 256;
+  const hf = new Float32Array(S * S);
+  const rnd = mulberry32(87);
+  for (let i = 0; i < hf.length; i++) hf[i] = rnd() * 0.6;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) hf[y * S + x] += tileNoise(x, y, S, S, 0.1, 2) * 0.4;
+  cache.polimero = { normalMap: toTex(normalFromHeight(hf, S, S, 0.8), { srgb: false, repeat: 10 }) };
+  return cache.polimero;
+}
+
+// ---------------- Equipo del soldado ----------------
+// Camuflaje multicam (tostado, marrón, oliva, claro y ramas oscuras) con formas orgánicas
+export function texMulticam() {
+  if (cache.multicam) return cache.multicam;
+  const S = 256;
+  const [c, g] = canvas(S);
+  const img = g.createImageData(S, S);
+  const base = [184, 166, 128], capas = [
+    { col: [214, 202, 168], esc: 0.024, umbral: 0.28, d: 11 },
+    { col: [124, 120, 78], esc: 0.018, umbral: 0.22, d: 37 },
+    { col: [140, 108, 72], esc: 0.022, umbral: 0.26, d: 71 },
+    { col: [88, 70, 48], esc: 0.044, umbral: 0.42, d: 113 },
+  ];
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    let col = base;
+    const wx = x + tileNoise(x, y, S, S, 0.04, 1) * 9, wy = y + tileNoise(y, x, S, S, 0.04, 1) * 9;
+    for (const L of capas) {
+      const n = tileNoise(wx + L.d * 7, wy - L.d * 3, S, S, L.esc, 2);
+      if (n > L.umbral) col = L.col;
+    }
+    const f = 0.94 + tileNoise(x, y, S, S, 0.2, 1) * 0.06;
+    const i = (y * S + x) * 4;
+    img.data[i] = col[0] * f; img.data[i + 1] = col[1] * f; img.data[i + 2] = col[2] * f; img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  // Trama del tejido rip-stop
+  g.strokeStyle = 'rgba(0,0,0,0.05)'; g.lineWidth = 1;
+  for (let k = 0; k < S; k += 4) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k, S); g.stroke(); g.beginPath(); g.moveTo(0, k); g.lineTo(S, k); g.stroke(); }
+  cache.multicam = toTex(c, { repeat: 2 });
+  return cache.multicam;
+}
+
+// Tela de cordura con cinchas MOLLE horizontales (2,5 cm) y costuras, para chalecos y mochilas
+export function texMolle(color = '#a89270', key = 'molle') {
+  if (cache[key]) return cache[key];
+  const S = 256;
+  const [c, g] = canvas(S);
+  const hf = new Float32Array(S * S);
+  g.fillStyle = color; g.fillRect(0, 0, S, S);
+  const rnd = mulberry32(key.length * 13);
+  for (let i = 0; i < 2500; i++) { g.fillStyle = `rgba(${rnd() < 0.5 ? 0 : 255},${rnd() < 0.5 ? 0 : 255},${rnd() < 0.5 ? 0 : 255},0.04)`; g.fillRect(rnd() * S, rnd() * S, 2, 2); }
+  for (let y = 0; y < S; y += 32) {
+    // cincha
+    g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(0, y + 20, S, 2);
+    g.fillStyle = 'rgba(255,255,255,0.07)'; g.fillRect(0, y + 4, S, 2);
+    for (let x = 0; x < S; x += 38) { g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(x, y + 3, 3, 18); }
+    for (let yy = y + 3; yy < y + 21; yy++) for (let x = 0; x < S; x++) hf[yy * S + x] = (x % 38) < 3 ? 0.3 : 1;
+  }
+  cache[key] = { map: toTex(c, { repeat: 4 }), normalMap: toTex(normalFromHeight(hf, S, S, 1.2), { srgb: false, repeat: 4 }) };
+  return cache[key];
+}
+
+// Funda de casco con manchas de pintura de dos tonos
+export function texCasco(base = '#c9b994', mancha = '#8a7656', key = 'casco') {
+  if (cache[key]) return cache[key];
+  const S = 256;
+  const [c, g] = canvas(S);
+  g.fillStyle = base; g.fillRect(0, 0, S, S);
+  const img = g.getImageData(0, 0, S, S);
+  const m = new THREE.Color(mancha);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const n = tileNoise(x, y, S, S, 0.018, 3);
+    const i = (y * S + x) * 4;
+    if (n > 0.18) { img.data[i] = m.r * 255; img.data[i + 1] = m.g * 255; img.data[i + 2] = m.b * 255; }
+    const k = 0.95 + tileNoise(x, y, S, S, 0.15, 1) * 0.05;
+    img.data[i] *= k; img.data[i + 1] *= k; img.data[i + 2] *= k;
+  }
+  g.putImageData(img, 0, 0);
+  cache[key] = toTex(c);
+  return cache[key];
+}

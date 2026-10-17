@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import * as TX from './texturas.js';
 import { material } from './modelos.js';
 import { crearModeloArma, equipoPorDefecto } from './arsenal.js';
+import { construirSoldado, construirBrazos } from './soldadoModelo.js';
 import { damp, dampAngle } from './util.js';
 
 export const FACCIONES = {
@@ -44,76 +45,22 @@ export class Soldado {
       { parte: 'pierna', r: 0.13, c: new THREE.Vector3() },
       { parte: 'pierna', r: 0.11, c: new THREE.Vector3() },
       { parte: 'pierna', r: 0.11, c: new THREE.Vector3() },
+      { parte: 'brazo', r: 0.075, c: new THREE.Vector3() },
+      { parte: 'brazo', r: 0.075, c: new THREE.Vector3() },
     ];
     this.construir();
   }
 
   construir() {
     const F = FACCIONES[this.faccion];
-    const camo = new THREE.MeshStandardMaterial({ map: TX.texCamo(this.faccion), roughness: 0.95 });
-    const placa = new THREE.MeshStandardMaterial({ color: F.placa, roughness: 0.9 });
-    const casco = new THREE.MeshStandardMaterial({ map: TX.texCamo(this.faccion), color: '#cfcfcf', roughness: 0.85 });
-    const bota = new THREE.MeshStandardMaterial({ color: '#2c241c', roughness: 0.8 });
-    const cinta = new THREE.MeshStandardMaterial({ color: F.cinta, roughness: 0.6 });
-    const sh = (m) => { m.castShadow = true; m.receiveShadow = true; return m; };
-
-    const raiz = new THREE.Group();
-    const cadera = new THREE.Group(); cadera.position.y = 0.95; raiz.add(cadera);
-    const pelvis = sh(new THREE.Mesh(geo('pelvis', () => new THREE.CapsuleGeometry(0.13, 0.12, 4, 10).rotateZ(Math.PI / 2).scale(1, 1, 0.85)), camo)); cadera.add(pelvis);
-    const torso = new THREE.Group(); cadera.add(torso);
-    const pecho = sh(new THREE.Mesh(geo('pecho', () => new THREE.CapsuleGeometry(0.16, 0.26, 4, 12).scale(1.18, 1, 0.75).translate(0, 0.3, 0)), camo)); torso.add(pecho);
-    const chaleco = sh(new THREE.Mesh(geo('chaleco', () => new THREE.CapsuleGeometry(0.17, 0.12, 3, 10).scale(1.15, 1, 0.92).translate(0, 0.36, 0)), placa)); torso.add(chaleco);
-    for (const lado of [-1, 1]) {
-      const hombro = sh(new THREE.Mesh(geo('hombro', () => new THREE.SphereGeometry(0.075, 10, 8)), camo));
-      hombro.position.set(lado * 0.2, 0.5, 0); torso.add(hombro);
-    }
-    const cuelloM = sh(new THREE.Mesh(geo('cuelloM', () => new THREE.CylinderGeometry(0.05, 0.06, 0.1, 8)), camo));
-    cuelloM.position.y = 0.58; torso.add(cuelloM);
-    // Portacargadores frontales
-    for (let i = -1; i <= 1; i++) {
-      const b = sh(new THREE.Mesh(geo('bolsa', () => new THREE.BoxGeometry(0.09, 0.13, 0.06)), placa));
-      b.position.set(i * 0.11, 0.28, -0.17); torso.add(b);
-    }
-    const mochila = sh(new THREE.Mesh(geo('mochila', () => new THREE.BoxGeometry(0.3, 0.32, 0.12)), placa));
-    mochila.position.set(0, 0.36, 0.2); torso.add(mochila);
-    // Cabeza y casco
-    const cuello = new THREE.Group(); cuello.position.y = 0.6; torso.add(cuello);
-    const cabeza = sh(new THREE.Mesh(geo('cabeza', () => new THREE.SphereGeometry(0.105, 12, 10).scale(0.9, 1.1, 1)), material('piel')));
-    cabeza.position.y = 0.08; cuello.add(cabeza);
-    const pasamontanas = sh(new THREE.Mesh(geo('pasam', () => new THREE.SphereGeometry(0.108, 12, 10, 0, Math.PI * 2, Math.PI * 0.45, Math.PI * 0.55).scale(0.92, 1.1, 1.02)), camo));
-    pasamontanas.position.y = 0.08; cuello.add(pasamontanas);
-    const cas = sh(new THREE.Mesh(geo('casco', () => new THREE.SphereGeometry(0.14, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55)), casco));
-    cas.position.y = 0.12; cuello.add(cas);
-    // Piernas
-    const pierna = (lado) => {
-      const muslo = new THREE.Group(); muslo.position.set(lado * 0.1, -0.06, 0); cadera.add(muslo);
-      const m = sh(new THREE.Mesh(geo('muslo', () => new THREE.CapsuleGeometry(0.085, 0.3, 3, 8).translate(0, -0.2, 0)), camo)); muslo.add(m);
-      const rod = new THREE.Group(); rod.position.y = -0.42; muslo.add(rod);
-      const e = sh(new THREE.Mesh(geo('espinilla', () => new THREE.CapsuleGeometry(0.07, 0.3, 3, 8).translate(0, -0.2, 0)), camo)); rod.add(e);
-      const b = sh(new THREE.Mesh(geo('bota', () => new THREE.BoxGeometry(0.11, 0.1, 0.27).translate(0, -0.43, -0.05)), bota)); rod.add(b);
-      return { muslo, rod };
-    };
-    this.pI = pierna(-1); this.pD = pierna(1);
-    // Arma y brazos (giran con el cabeceo)
-    const pivArma = new THREE.Group(); pivArma.position.set(0.05, 0.42, -0.05); torso.add(pivArma);
-    const brazo = (lado, pos, rot) => {
-      const g = new THREE.Group(); g.position.set(lado * 0.2, 0.15, 0.0); pivArma.add(g);
-      const a = sh(new THREE.Mesh(geo('brazo', () => new THREE.CapsuleGeometry(0.055, 0.42, 3, 8)), camo));
-      a.position.copy(pos); a.rotation.set(...rot); g.add(a);
-      return a;
-    };
-    brazo(1, new THREE.Vector3(-0.02, -0.08, -0.14), [1.2, 0, 0.25]);
-    const bi = brazo(-1, new THREE.Vector3(0.12, -0.04, -0.3), [1.35, 0, -0.85]);
-    const banda = new THREE.Mesh(geo('banda', () => new THREE.CylinderGeometry(0.06, 0.06, 0.06, 8)), cinta);
-    banda.position.y = 0.12; bi.add(banda);
-    raiz.traverse((o) => { if (o.isMesh) o.userData.soldado = this; });
-
-    Object.assign(this, { raiz, cadera, torso, cuello, pivArma });
+    const P = construirSoldado(this.faccion, F.cinta);
+    Object.assign(this, { raiz: P.raiz, cadera: P.cadera, torso: P.torso, cuello: P.cuello, pivArma: P.pivArma, pI: P.pI, pD: P.pD, matSoldado: P.materiales, matCinta: P.cinta });
+    this.raiz.traverse((o) => { if (o.isMesh) o.userData.soldado = this; });
+    this.marcasFijas = [P.cabeza, P.pecho, P.pelvis, P.pI.m, P.pD.m, P.pI.e, P.pD.e];
+    this.offsets = [new THREE.Vector3(0, 0.02, 0), new THREE.Vector3(0, 0.05, 0), new THREE.Vector3(0, 0.02, 0),
+      new THREE.Vector3(0, -0.2, 0), new THREE.Vector3(0, -0.2, 0), new THREE.Vector3(0, -0.2, 0), new THREE.Vector3(0, -0.2, 0),
+      new THREE.Vector3(0, -0.14, 0), new THREE.Vector3(0, -0.14, 0)];
     this.setEquipo(equipoPorDefecto('asalto', this.faccion));
-    // Marcadores de cajas de impacto
-    this.marcas = [cabeza, pecho, pelvis, this.pI.muslo.children[0], this.pD.muslo.children[0], this.pI.rod.children[0], this.pD.rod.children[0]];
-    this.offsets = [new THREE.Vector3(0, 0.02, 0), new THREE.Vector3(0, 0.38, 0), new THREE.Vector3(0, 0.02, 0),
-      new THREE.Vector3(0, -0.2, 0), new THREE.Vector3(0, -0.2, 0), new THREE.Vector3(0, -0.2, 0), new THREE.Vector3(0, -0.2, 0)];
   }
 
   // Etiqueta con el nombre (solo aliados)
@@ -148,13 +95,33 @@ export class Soldado {
     poner('primaria', eq.primaria, eq.accPrimaria, new THREE.Vector3(0.08, -0.04, -0.18));
     poner('secundaria', eq.secundaria, eq.accSecundaria, new THREE.Vector3(0.02, 0.02, -0.34));
     poner('especial', eq.especial, null, new THREE.Vector3(0.14, 0.12, -0.05));
+    this.arma = null;
     this.setArma('primaria');
   }
 
   setArma(a) {
     if (!this.modelosArma[a]) a = 'primaria';
+    const cambio = a !== this.arma || !this.brazos;
     this.arma = a;
     for (const [k, m] of Object.entries(this.modelosArma)) m.visible = k === a;
+    if (cambio) this.colocarBrazos();
+  }
+
+  // Brazos que agarran el arma actual (empuñadura y guardamanos)
+  colocarBrazos() {
+    if (this.brazos) this.pivArma.remove(this.brazos);
+    const m = this.modelosArma[this.arma];
+    let manoD, manoI;
+    if (this.arma === 'secundaria') { manoD = new THREE.Vector3(0.02, -0.02, -0.33); manoI = new THREE.Vector3(0.0, -0.03, -0.32); }
+    else if (this.arma === 'especial') { manoD = new THREE.Vector3(0.14, 0.08, -0.06); manoI = new THREE.Vector3(0.12, 0.08, -0.26); }
+    else {
+      manoD = m.position.clone().add(new THREE.Vector3(0, -0.045, 0.035));
+      manoI = m.position.clone().add(m.userData.manoIzq).add(new THREE.Vector3(0.0, -0.02, 0));
+    }
+    this.brazos = construirBrazos(this.matSoldado, this.matCinta, manoD, manoI);
+    this.brazos.traverse((o) => { if (o.isMesh) o.userData.soldado = this; });
+    this.pivArma.add(this.brazos);
+    this.marcas = [...this.marcasFijas, this.brazos.userData.brazoD, this.brazos.userData.brazoI];
   }
 
   idArma() { return this.equipo[this.arma] || this.equipo.primaria; }
