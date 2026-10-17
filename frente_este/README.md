@@ -6,17 +6,22 @@ Todo es procedural: no hay modelos ni texturas externas. three.js r160 va inclui
 
 ## Cómo jugar
 
-```bash
-cd frente_este/servidor
-npm install
-npm start            # http://localhost:8080  (WebSocket en /ws)
-```
+**En Windows (lo más fácil):**
+1. Descarga el ZIP del repositorio desde GitHub (botón verde **Code → Download ZIP**, en la rama `claude/zen-ptolemy-hwero2`) y descomprímelo.
+2. Entra en la carpeta `frente_este` y haz doble clic en **`INICIAR-WINDOWS.bat`**.
+   - Si no tienes Node.js, el lanzador lo instala con `winget`. Si no puede, abre la página de descarga: instala la versión LTS y vuelve a hacer doble clic.
+   - Si Windows pregunta por el firewall, pulsa **Permitir** (en redes privadas) para que otros de tu WiFi puedan unirse.
+3. Se abre el navegador en `http://localhost:8080`. Deja abierta la ventana negra mientras jugáis.
 
-- **Partida local**: abre `http://localhost:8080`, elige *Partida local (con IA)*: tú + 1 aliado IA contra 2 enemigos IA.
-- **Multijugador beta**: cada jugador abre `http://IP-DEL-SERVIDOR:8080` y elige *Multijugador beta*. La dirección `ws://IP:8080/ws` se rellena sola. Máximo 4 por sala y el reparto de bandos se equilibra 2 contra 2. Con distintas *salas* puede haber varias partidas a la vez.
-- En el móvil, pon el teléfono en horizontal. Al pulsar JUGAR se pide pantalla completa.
+**En macOS o Linux:** instala Node.js (LTS) y ejecuta `./iniciar-mac-linux.sh`, o bien `cd servidor && npm start`.
 
-> Para jugar fuera de tu red local, el servidor tiene que estar publicado con HTTPS/WSS (por ejemplo detrás de un proxy inverso), porque los navegadores móviles exigen un contexto seguro para la pantalla completa y el bloqueo de orientación.
+El servidor no necesita `npm install`: no tiene dependencias externas.
+
+- **Partida local**: elige *Partida local (con IA)*: tú + 1 aliado IA contra 2 enemigos IA.
+- **Multijugador beta**: cada jugador abre la dirección `http://IP:8080` que muestra la ventana del servidor y elige *Multijugador beta*. Máximo 4 por sala y el reparto de bandos se equilibra 2 contra 2.
+- En el móvil, pon el teléfono en horizontal.
+
+> Para jugar fuera de tu red local, el servidor tiene que estar publicado con HTTPS/WSS (por ejemplo detrás de un proxy inverso o en un hosting de Node).
 
 ## Controles
 

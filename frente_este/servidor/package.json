@@ -1,13 +1,10 @@
 {
   "name": "frente-este-servidor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Servidor de retransmisión para la beta multijugador (4 jugadores) de FRENTE ESTE",
+  "description": "Servidor de la beta multijugador (4 jugadores) de FRENTE ESTE. Sin dependencias.",
   "main": "servidor.js",
   "scripts": {
-    "start": "node servidor.js"
-  },
-  "dependencies": {
-    "ws": "^8.18.0"
+    "start": "node servidor.js 8080 --abrir"
   }
 }

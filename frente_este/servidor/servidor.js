@@ -1,11 +1,15 @@
 // Servidor de FRENTE ESTE (beta): sirve los archivos estáticos del juego y retransmite el estado
-// entre hasta 4 jugadores por sala mediante WebSocket. Uso: node servidor.js [puerto]
+// entre hasta 4 jugadores por sala mediante WebSocket. Sin dependencias externas.
+// Uso: node servidor.js [puerto] [--abrir]
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { WebSocketServer } = require('ws');
+const os = require('os');
+const { exec } = require('child_process');
+const { WebSocketServer } = require('./ws-mini.js');
 
-const PUERTO = Number(process.argv[2] || process.env.PORT || 8080);
+const PUERTO = Number(process.argv.slice(2).find((a) => /^\d+$/.test(a)) || process.env.PORT || 8080);
+const ABRIR = process.argv.includes('--abrir');
 const RAIZ = path.resolve(__dirname, '..');
 const MAX_JUGADORES = 4;
 const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
@@ -94,4 +98,23 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-servidor.listen(PUERTO, () => console.log(`FRENTE ESTE — servidor en http://localhost:${PUERTO}  (WebSocket en /ws)`));
+servidor.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') console.error(`El puerto ${PUERTO} ya está en uso. ¿Hay otro servidor abierto? Ciérralo o usa otro puerto: node servidor.js 8081`);
+  else console.error(e);
+  process.exit(1);
+});
+
+servidor.listen(PUERTO, () => {
+  const ips = Object.values(os.networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal).map((i) => i.address);
+  console.log('');
+  console.log('  FRENTE ESTE · servidor en marcha');
+  console.log(`  En este PC:            http://localhost:${PUERTO}`);
+  for (const ip of ips) console.log(`  Otros en tu red WiFi:  http://${ip}:${PUERTO}`);
+  console.log('  Deja esta ventana abierta mientras jugáis. Ctrl+C para cerrar.');
+  console.log('');
+  if (ABRIR) {
+    const url = `http://localhost:${PUERTO}`;
+    const cmd = process.platform === 'win32' ? `start "" "${url}"` : process.platform === 'darwin' ? `open "${url}"` : `xdg-open "${url}"`;
+    exec(cmd, () => {});
+  }
+});
